@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Templates Showcase</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            display: ['"Outfit"', 'sans-serif'],
+          },
+          colors: {
+            background: '#0B0D17',
+            surface: '#151828',
+            surfaceHover: '#1E2335',
+            primary: '#8A2BE2',
+            primaryLight: '#B983FF',
+            textMain: '#FFFFFF',
+            textMuted: '#94A3B8',
+            borderMain: '#2A3143'
+          },
+          animation: {
+            'fade-in-up': 'fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+          keyframes: {
+            fadeInUp: {
+              '0%': { opacity: '0', transform: 'translateY(20px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #0B0D17;
+      color: #FFFFFF;
+      overflow-x: hidden;
+    }
+    
+    .glass-nav {
+      background: rgba(21, 24, 40, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .hero-glow {
+      position: absolute;
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(138,43,226,0.2) 0%, rgba(11,13,23,0) 70%);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    .card {
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    .card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(138, 43, 226, 0.15);
+      border-color: rgba(138, 43, 226, 0.4);
+    }
+
+    .card-img-wrapper {
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 16/10;
+    }
+
+    .card-img-wrapper img {
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top;
+    }
+
+    .card:hover .card-img-wrapper img {
+      transform: scale(1.05);
+    }
+
+    .card-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(21, 24, 40, 1) 0%, rgba(21, 24, 40, 0) 50%);
+      opacity: 0.6;
+      transition: opacity 0.4s ease;
+    }
+
+    .card:hover .card-overlay {
+      opacity: 0.2;
+    }
+
+    /* Skeleton loader animation */
+    @keyframes shimmer {
+      0% { background-position: -1000px 0; }
+      100% { background-position: 1000px 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #151828 25%, #1E2335 50%, #151828 75%);
+      background-size: 1000px 100%;
+      animation: shimmer 2s infinite linear;
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #0B0D17; }
+    ::-webkit-scrollbar-thumb { background: #2A3143; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3E475F; }
+  </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col relative selection:bg-primary/30 selection:text-white">
+
+  <!-- Background glow -->
+  <div class="hero-glow animate-pulse-slow"></div>
+
+  <!-- Navigation -->
+  <nav class="glass-nav fixed w-full top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-blue-500 flex items-center justify-center shadow-lg shadow-primary/20">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <span class="font-display font-bold text-xl tracking-tight text-white">Antigravity Templates</span>
+      </div>
+      
+      <div class="hidden md:flex items-center space-x-8">
+        <a href="#" class="text-sm font-medium text-textMuted hover:text-white transition-colors">All Templates</a>
+        <a href="prompt-filter.html" class="text-sm font-medium text-textMuted hover:text-white transition-colors">My Projects</a>
+        <a href="prompt-filter.html" class="px-5 py-2.5 rounded-full bg-surface border border-borderMain text-sm font-semibold hover:border-primary/50 hover:bg-surfaceHover transition-all">
+          Go to Builder
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-grow pt-32 pb-24">
+    <div class="max-w-7xl mx-auto px-6">
+      
+      <!-- Hero Section -->
+      <div class="mb-16 max-w-3xl animate-fade-in-up">
+        <h1 class="font-display font-extrabold text-5xl md:text-6xl text-white mb-6 leading-tight">
+          Start with a <span class="text-transparent bg-clip-text bg-gradient-to-r from-primaryLight to-primary">premium</span> blueprint.
+        </h1>
+        <p class="text-lg text-textMuted leading-relaxed max-w-2xl">
+          Browse our curated collection of high-quality, production-ready React templates. Every template is generated dynamically and fully customizable in the AI Builder.
+        </p>
+      </div>
+
+      <!-- Search & Filter -->
+      <div class="flex flex-col md:flex-row gap-4 mb-10 items-center justify-between animate-fade-in-up" style="animation-delay: 0.1s;">
+        <div class="relative w-full md:w-96 group">
+          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <svg class="w-5 h-5 text-textMuted group-focus-within:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
+          <input 
+            type="text" 
+            id="searchInput"
+            placeholder="Search templates..." 
+            class="w-full bg-surface border border-borderMain rounded-full py-3 pl-12 pr-6 text-sm text-white placeholder-textMuted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all shadow-inner"
+          >
+        </div>
+      </div>
+
+      <!-- Grid -->
+      <div id="templatesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <!-- Skeleton loaders initially -->
+        <div class="skeleton h-[360px] rounded-2xl"></div>
+        <div class="skeleton h-[360px] rounded-2xl"></div>
+        <div class="skeleton h-[360px] rounded-2xl"></div>
+        <div class="skeleton h-[360px] rounded-2xl"></div>
+        <div class="skeleton h-[360px] rounded-2xl"></div>
+        <div class="skeleton h-[360px] rounded-2xl"></div>
+      </div>
+      
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden text-center py-24">
+        <div class="w-16 h-16 rounded-full bg-surface border border-borderMain flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-textMuted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+        </div>
+        <h3 class="text-xl font-display font-semibold text-white mb-2">No templates found</h3>
+        <p class="text-textMuted">Try adjusting your search terms.</p>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-borderMain bg-surface">
+    <div class="max-w-7xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded bg-gradient-to-br from-primary to-blue-500 flex items-center justify-center">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          </svg>
+        </div>
+        <span class="font-display font-bold text-sm text-white">Antigravity AI</span>
+      </div>
+      <p class="text-sm text-textMuted">© 2026 Antigravity IDE. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const grid = document.getElementById('templatesGrid');
+      const searchInput = document.getElementById('searchInput');
+      const emptyState = document.getElementById('emptyState');
+      
+      let allTemplates = [];
+
+      try {
+        const response = await fetch('/api/templates');
+        if (!response.ok) throw new Error('Failed to fetch templates');
+        
+        const data = await response.json();
+        allTemplates = data.templates || [];
+        
+        renderTemplates(allTemplates);
+      } catch (error) {
+        console.error('Error:', error);
+        grid.innerHTML = '<div class="col-span-full text-center py-12 text-red-400">Failed to load templates. Make sure the server is running.</div>';
+      }
+
+      searchInput.addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase();
+        const filtered = allTemplates.filter(t => 
+          t.title.toLowerCase().includes(term) || 
+          t.prompt.toLowerCase().includes(term)
+        );
+        renderTemplates(filtered);
+      });
+
+      function renderTemplates(templates) {
+        if (templates.length === 0) {
+          grid.innerHTML = '';
+          emptyState.classList.remove('hidden');
+          return;
+        }
+
+        emptyState.classList.add('hidden');
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const returnUrl = urlParams.get('return') || 'template-editor.html';
+        const separator = returnUrl.includes('?') ? '&' : '?';
+
+        grid.innerHTML = templates.map((template, index) => {
+          // Staggered animation delay
+          const delay = Math.min(index * 0.05, 0.5);
+          const targetUrl = `${returnUrl}${separator}template=${encodeURIComponent(template.id)}`;
+          
+          return `
+            <a href="${targetUrl}" class="card group bg-surface border border-borderMain rounded-2xl overflow-hidden block animate-fade-in-up" style="animation-delay: ${delay}s; animation-fill-mode: both;">
+              <div class="card-img-wrapper bg-background border-b border-borderMain">
+                <!-- Fallback to a placeholder pattern if image is missing -->
+                <img 
+                  src="/prompt-filter-react/public/previews/${template.id}.jpg" 
+                  alt="${template.title}"
+                  loading="lazy"
+                  onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMxMTE1MjYiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM1NTVhNmEiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5QcmV2aWV3IFVuYXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==';"
+                />
+                <div class="card-overlay"></div>
+                
+                <div class="absolute top-4 right-4 bg-black/60 backdrop-blur-md border border-white/10 p-2 rounded-full opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                  <span class="text-xs font-semibold text-white px-2">Use Template</span>
+                </div>
+              </div>
+              
+              <div class="p-6 relative">
+                <h3 class="font-display font-semibold text-lg text-white mb-2 group-hover:text-primaryLight transition-colors">${template.title}</h3>
+                <p class="text-sm text-textMuted line-clamp-2">${template.prompt}</p>
+              </div>
+            </a>
+          `;
+        }).join('');
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,3162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prompt Filter & Verifier</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <!-- Third-party styles and scripts for Code Viewer -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #0d0f12;
+      --bg2: #13161b;
+      --bg3: #1a1e25;
+      --border: rgba(255, 255, 255, 0.07);
+      --border2: rgba(255, 255, 255, 0.13);
+      --text: #e8eaf0;
+      --text2: #8b90a0;
+      --text3: #555a6a;
+      --accent: #4f8ef7;
+      --accent-dim: rgba(79, 142, 247, 0.12);
+      --green: #3ecf8e;
+      --green-dim: rgba(62, 207, 142, 0.12);
+      --red: #f56565;
+      --red-dim: rgba(245, 101, 101, 0.12);
+      --amber: #f6ad55;
+      --amber-dim: rgba(246, 173, 85, 0.12);
+      --radius: 10px;
+      --radius-lg: 14px;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 680px;
+    }
+
+    /* ── Header ── */
+    .page-header {
+      margin-bottom: 2rem;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .page-header .label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .page-header h1 {
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .page-header p {
+      font-size: 14px;
+      color: var(--text2);
+      line-height: 1.6;
+    }
+
+    /* ── API Config ── */
+    .api-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 1.25rem;
+      animation: fadeUp 0.4s 0.05s ease both;
+    }
+
+    @media (max-width: 520px) {
+      .api-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .field label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text3);
+    }
+
+    .field input {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .field input:focus {
+      border-color: var(--accent);
+    }
+
+    .field input::placeholder {
+      color: var(--text3);
+    }
+
+    /* ── Example Pills ── */
+    .examples-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 1rem;
+      animation: fadeUp 0.4s 0.1s ease both;
+    }
+
+    .ex-label {
+      width: 100%;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text3);
+      margin-bottom: 2px;
+    }
+
+    .ex-pill {
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .ex-pill:hover {
+      background: var(--bg3);
+      border-color: var(--border2);
+      color: var(--text);
+    }
+
+    /* ── Input Card ── */
+    .input-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: 1rem;
+      animation: fadeUp 0.4s 0.15s ease both;
+      transition: border-color 0.2s;
+    }
+
+    .input-card:focus-within {
+      border-color: var(--border2);
+    }
+
+    .input-card textarea {
+      width: 100%;
+      min-height: 110px;
+      background: transparent;
+      border: none;
+      outline: none;
+      resize: vertical;
+      padding: 16px;
+      font-size: 14px;
+      font-family: 'DM Sans', sans-serif;
+      color: var(--text);
+      line-height: 1.65;
+    }
+
+    .input-card textarea::placeholder {
+      color: var(--text3);
+    }
+
+    .input-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .char-count {
+      font-size: 12px;
+      color: var(--text3);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Button ── */
+    .analyze-btn {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+      letter-spacing: 0.01em;
+    }
+
+    .analyze-btn:hover {
+      opacity: 0.88;
+    }
+
+    .analyze-btn:active {
+      transform: scale(0.97);
+    }
+
+    .analyze-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ── Result Card ── */
+    .result-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      animation: fadeUp 0.35s ease both;
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .verdict-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .verdict-icon.pass {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .verdict-icon.fail {
+      background: var(--red-dim);
+      color: var(--red);
+    }
+
+    .verdict-icon.warn {
+      background: var(--amber-dim);
+      color: var(--amber);
+    }
+
+    .result-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .verdict-badge {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+
+    .verdict-badge.pass {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+
+    .verdict-badge.fail {
+      background: var(--red-dim);
+      color: var(--red);
+    }
+
+    .verdict-badge.warn {
+      background: var(--amber-dim);
+      color: var(--amber);
+    }
+
+    .overall-score {
+      margin-left: auto;
+      font-size: 24px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+    }
+
+    .overall-score span {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text3);
+    }
+
+    .result-body {
+      padding: 16px 18px;
+    }
+
+    /* Score grid */
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .score-cell {
+      background: var(--bg3);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+
+    .score-cell .s-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text3);
+      margin-bottom: 4px;
+    }
+
+    .score-cell .s-val {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .score-cell .s-bar {
+      height: 3px;
+      border-radius: 2px;
+      background: var(--border);
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .score-cell .s-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .c-green {
+      color: var(--green);
+    }
+
+    .c-red {
+      color: var(--red);
+    }
+
+    .c-amber {
+      color: var(--amber);
+    }
+
+    .fill-green {
+      background: var(--green);
+    }
+
+    .fill-red {
+      background: var(--red);
+    }
+
+    .fill-amber {
+      background: var(--amber);
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 14px 0;
+    }
+
+    /* Flags */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text3);
+      margin-bottom: 8px;
+    }
+
+    .flags-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .flag-tag {
+      font-size: 12px;
+      padding: 4px 11px;
+      border-radius: 20px;
+      background: var(--red-dim);
+      color: var(--red);
+      border: 1px solid rgba(245, 101, 101, 0.2);
+      font-weight: 500;
+    }
+
+    /* Explanation */
+    .explanation-text {
+      font-size: 13px;
+      color: var(--text2);
+      line-height: 1.7;
+    }
+
+    /* Suggestion box */
+    .suggestion-box {
+      background: rgba(79, 142, 247, 0.08);
+      border: 1px solid rgba(79, 142, 247, 0.2);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #a0bfff;
+      line-height: 1.7;
+      font-style: italic;
+    }
+
+    /* Proceed bar */
+    .proceed-bar {
+      display: flex;
+      gap: 8px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .proceed-btn {
+      flex: 1;
+      padding: 9px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+      border: none;
+    }
+
+    .proceed-btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn-go {
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid rgba(62, 207, 142, 0.25);
+    }
+
+    .btn-go:hover {
+      opacity: 0.8;
+    }
+
+    .btn-revise {
+      background: var(--red-dim);
+      color: var(--red);
+      border: 1px solid rgba(245, 101, 101, 0.25);
+    }
+
+    .btn-revise:hover {
+      opacity: 0.8;
+    }
+
+    .btn-plan {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid rgba(79, 142, 247, 0.25);
+    }
+
+    .btn-plan:hover {
+      opacity: 0.8;
+    }
+
+    /* Plan display */
+    .plan-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      animation: fadeUp 0.35s ease both;
+      margin-bottom: 1rem;
+    }
+
+    .plan-header {
+      padding: 18px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg3);
+    }
+
+    .plan-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .plan-type {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      padding: 4px 10px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+
+    .plan-body {
+      padding: 18px;
+    }
+
+    .plan-section {
+      margin-bottom: 18px;
+    }
+
+    .plan-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    .tech-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .tech-item {
+      background: var(--bg3);
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .tech-label {
+      font-size: 11px;
+      color: var(--text3);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .color-palette {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .color-swatch {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.2s;
+    }
+
+    .color-swatch:hover {
+      transform: scale(1.1);
+    }
+
+    .color-label {
+      font-size: 10px;
+      color: var(--text3);
+      position: absolute;
+      bottom: -18px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .sections-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .section-item {
+      background: var(--bg3);
+      border-radius: var(--radius);
+      padding: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .section-order {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-radius: 50%;
+      text-align: center;
+      line-height: 24px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 8px;
+    }
+
+    .section-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .section-type {
+      display: inline-block;
+      font-size: 10px;
+      background: rgba(79, 142, 247, 0.1);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+
+    .section-desc {
+      font-size: 12px;
+      color: var(--text2);
+      margin-bottom: 6px;
+    }
+
+    .section-components {
+      font-size: 11px;
+      color: var(--text3);
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2.5rem 1rem;
+      color: var(--text3);
+      font-size: 13px;
+      gap: 10px;
+      text-align: center;
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      opacity: 0.4;
+    }
+
+    /* Loading skeleton */
+    .skeleton-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      animation: fadeUp 0.3s ease both;
+    }
+
+    .skeleton-line {
+      height: 12px;
+      background: var(--bg3);
+      border-radius: 6px;
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .skeleton-line::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
+      animation: shimmer 1.4s infinite;
+    }
+
+    @keyframes shimmer {
+      from {
+        transform: translateX(-100%);
+      }
+
+      to {
+        transform: translateX(100%);
+      }
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ── Plan Card ── */
+    .plan-card {
+      background: var(--bg2);
+      border: 1px solid rgba(79, 142, 247, 0.2);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-top: 1rem;
+      animation: fadeUp 0.35s 0.1s ease both;
+    }
+
+    .plan-header {
+      background: rgba(79, 142, 247, 0.06);
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .plan-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .plan-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+      margin-bottom: 4px;
+    }
+
+    .plan-complexity {
+      font-size: 12px;
+      color: var(--text2);
+    }
+
+    .plan-body {
+      padding: 18px;
+    }
+
+    .plan-section {
+      margin-bottom: 18px;
+    }
+
+    .plan-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .plan-section-label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    /* Tech Stack Grid */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .tech-item {
+      background: var(--bg3);
+      padding: 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+
+    .tech-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text3);
+      margin-bottom: 4px;
+    }
+
+    .tech-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Color Swatches */
+    .colors-grid {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .color-swatch {
+      text-align: center;
+    }
+
+    .swatch-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .swatch-circle:hover {
+      transform: scale(1.1);
+    }
+
+    .swatch-label {
+      font-size: 10px;
+      color: var(--text3);
+      text-transform: capitalize;
+    }
+
+    /* Sections List */
+    .sections-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .section-item {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .section-order {
+      width: 32px;
+      height: 32px;
+      background: rgba(79, 142, 247, 0.2);
+      color: var(--accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .section-content {
+      flex: 1;
+    }
+
+    .section-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .section-type-badge {
+      display: inline-block;
+      background: rgba(79, 142, 247, 0.1);
+      color: var(--accent);
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .section-desc {
+      font-size: 12px;
+      color: var(--text2);
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+
+    .section-components {
+      font-size: 11px;
+      color: var(--text3);
+    }
+
+    /* Plan Summary */
+    .plan-summary {
+      font-size: 13px;
+      color: var(--text2);
+      line-height: 1.7;
+    }
+
+    /* Plan Footer */
+    .plan-footer {
+      display: flex;
+      gap: 8px;
+      padding: 12px 18px;
+      border-top: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* ── Generation Steps (NEW) ── */
+    .steps-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      margin-top: 1rem;
+      animation: fadeUp 0.35s ease both;
+    }
+
+    .steps-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+
+    .step-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      background: var(--bg3);
+      margin-bottom: 8px;
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+      opacity: 0.45;
+    }
+
+    .step-row.active {
+      opacity: 1;
+      border-color: rgba(79, 142, 247, 0.35);
+      background: rgba(79, 142, 247, 0.06);
+    }
+
+    .step-row.done {
+      opacity: 1;
+      border-color: rgba(62, 207, 142, 0.25);
+    }
+
+    .step-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 700;
+      background: var(--bg2);
+      color: var(--text3);
+      border: 1px solid var(--border);
+    }
+
+    .step-row.active .step-icon {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-color: rgba(79, 142, 247, 0.4);
+    }
+
+    .step-row.done .step-icon {
+      background: var(--green-dim);
+      color: var(--green);
+      border-color: rgba(62, 207, 142, 0.3);
+    }
+
+    .step-text {
+      flex: 1;
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .step-meta {
+      font-size: 11px;
+      color: var(--text3);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .step-spin {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid rgba(79, 142, 247, 0.25);
+      border-top-color: var(--accent);
+      animation: spin 0.6s linear infinite;
+    }
+
+    /* ── Website Overview (NEW) ── */
+    .overview-wrap {
+      margin-top: 1rem;
+      animation: fadeUp 0.45s ease both;
+    }
+
+    .overview-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .overview-frame {
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
+    }
+
+    .ov-browser-bar {
+      background: #1f242c;
+      padding: 9px 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ov-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+    }
+
+    .ov-dot.r {
+      background: #ff5f56;
+    }
+
+    .ov-dot.y {
+      background: #ffbd2e;
+    }
+
+    .ov-dot.g {
+      background: #27c93f;
+    }
+
+    .ov-url {
+      margin-left: 14px;
+      font-size: 11px;
+      color: var(--text3);
+      font-family: 'JetBrains Mono', monospace;
+      background: #14171c;
+      padding: 3px 10px;
+      border-radius: 4px;
+    }
+
+    .ov-site {
+      padding: 0;
+    }
+
+    .ov-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      font-size: 13px;
+    }
+
+    .ov-brand {
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .ov-nav-links {
+      display: flex;
+      gap: 18px;
+    }
+
+    .ov-nav-links span {
+      font-size: 12px;
+      opacity: 0.75;
+    }
+
+    .ov-nav-cta {
+      font-size: 11px;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .ov-hero {
+      padding: 40px 24px 36px;
+      text-align: center;
+    }
+
+    .ov-eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      margin-bottom: 12px;
+    }
+
+    .ov-headline {
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 14px;
+      max-width: 520px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .ov-sub {
+      font-size: 14px;
+      line-height: 1.6;
+      opacity: 0.75;
+      max-width: 460px;
+      margin: 0 auto 22px;
+    }
+
+    .ov-ctas {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .ov-btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: default;
+    }
+
+    .ov-btn.primary {
+      color: #fff;
+    }
+
+    .ov-btn.secondary {
+      background: transparent;
+      border: 1px solid currentColor;
+    }
+
+    .ov-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: rgba(0, 0, 0, 0.06);
+      border-top: 1px solid rgba(0, 0, 0, 0.06);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .ov-stat {
+      padding: 18px 12px;
+      text-align: center;
+    }
+
+    .ov-stat-val {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .ov-stat-lbl {
+      font-size: 11px;
+      opacity: 0.6;
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .ov-features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      padding: 32px 24px;
+    }
+
+    @media (max-width: 560px) {
+
+      .ov-features,
+      .ov-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .ov-nav-links {
+        display: none;
+      }
+
+      .ov-headline {
+        font-size: 24px;
+      }
+    }
+
+    .ov-feat {
+      text-align: left;
+    }
+
+    .ov-feat-icon {
+      font-size: 22px;
+      margin-bottom: 8px;
+    }
+
+    .ov-feat-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .ov-feat-desc {
+      font-size: 12px;
+      line-height: 1.55;
+      opacity: 0.7;
+    }
+
+    .ov-footer {
+      padding: 16px 24px;
+      font-size: 11px;
+      opacity: 0.55;
+      text-align: center;
+      border-top: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .ov-meta-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      font-size: 11px;
+    }
+
+    .ov-chip {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      padding: 3px 9px;
+      border-radius: 20px;
+      color: var(--text2);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Sub-Classification ── */
+    .subclass-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-top: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .subclass-label::before {
+      content: '';
+      display: block;
+      width: 14px;
+      height: 1px;
+      background: rgba(79, 142, 247, 0.4);
+    }
+
+    .subclass-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .subclass-col {
+      background: rgba(79, 142, 247, 0.04);
+      border: 1px solid rgba(79, 142, 247, 0.12);
+      border-radius: 8px;
+      padding: 10px 12px;
+      position: relative;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .subclass-col:hover {
+      border-color: rgba(79, 142, 247, 0.3);
+      background: rgba(79, 142, 247, 0.08);
+    }
+
+    .subclass-col-pos {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      width: 18px;
+      height: 18px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-radius: 50%;
+      font-size: 9px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .subclass-col-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+      padding-right: 24px;
+    }
+
+    .subclass-col-role {
+      font-size: 11px;
+      color: var(--text2);
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+
+    .subclass-col-components {
+      font-size: 10px;
+      color: var(--text3);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .subclass-col-content {
+      margin-top: 5px;
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    @media (max-width: 520px) {
+      .subclass-grid {
+        grid-template-columns: 1fr !important;
+      }
+    }
+
+    /* ── Completion Banner ── */
+    .completion-banner {
+      background: rgba(62, 207, 142, 0.08);
+      border: 1px solid rgba(62, 207, 142, 0.2);
+      border-radius: var(--radius-lg);
+      padding: 18px 22px;
+      margin-top: 1rem;
+      text-align: center;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .completion-icon {
+      font-size: 28px;
+      margin-bottom: 6px;
+    }
+
+    .completion-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 4px;
+    }
+
+    .completion-sub {
+      font-size: 12px;
+      color: var(--text2);
+      line-height: 1.5;
+    }
+
+    /* ── Code Viewer styles ── */
+    .code-viewer-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-top: 1.5rem;
+      animation: fadeUp 0.4s ease both;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .code-viewer-header {
+      background: var(--bg3);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-viewer-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .code-viewer-badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+
+    .code-viewer-badge.ai {
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid rgba(62, 207, 142, 0.2);
+    }
+
+    .code-viewer-badge.fallback {
+      background: var(--amber-dim);
+      color: var(--amber);
+      border: 1px solid rgba(246, 173, 85, 0.2);
+    }
+
+    .code-tabs-container {
+      display: flex;
+      background: #14171c;
+      padding: 6px 6px 0;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .code-tabs-container::-webkit-scrollbar {
+      display: none;
+    }
+
+    .code-tab {
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text2);
+      background: transparent;
+      border: none;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 2px solid transparent;
+      outline: none;
+    }
+
+    .code-tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .code-tab.active {
+      color: var(--accent);
+      background: var(--bg2);
+      border-bottom-color: var(--accent);
+    }
+
+    .code-viewer-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .code-action-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text2);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .code-action-btn:hover {
+      color: var(--text);
+      border-color: var(--border2);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .code-action-btn:active {
+      transform: scale(0.97);
+    }
+
+    .code-content-wrapper {
+      position: relative;
+      background: #0d0f12;
+      min-height: 350px;
+    }
+
+    .code-pre-container {
+      display: flex;
+      background: #0d0f12;
+    }
+
+    .line-numbers-gutter {
+      padding: 20px 10px 20px 20px;
+      border-right: 1px solid var(--border);
+      color: var(--text3);
+      text-align: right;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .code-pre {
+      margin: 0;
+      padding: 20px;
+      overflow: auto;
+      max-height: 550px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #e8eaf0;
+      flex: 1;
+    }
+
+    .code-pre code {
+      font-family: inherit !important;
+      background: none !important;
+      text-shadow: none !important;
+      padding: 0 !important;
+    }
+
+    .preview-iframe-container {
+      width: 100%;
+      height: 550px;
+      background: #fff;
+      position: relative;
+    }
+
+    .preview-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #fff;
+    }
+
+    .code-skeleton {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .code-skeleton-line {
+      height: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .code-skeleton-line::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+      :root {
+      --bg: #0d0f12;
+      --bg2: #13161b;
+      --bg3: #1a1e25;
+      --border: rgba(255, 255, 255, 0.07);
+      --border2: rgba(255, 255, 255, 0.13);
+      --text: #ffffff;
+      --text2: #8b90a0;
+      --text3: #555a6a;
+      --accent: #4f8ef7;
+      --radius: 12px;
+      --radius-lg: 24px;
+      --gradient-bg: radial-gradient(circle at 10% 20%, rgb(255, 126, 179) 0%, rgb(255, 117, 140) 20%, rgb(184, 115, 255) 50%, rgb(105, 145, 255) 80%, rgb(50, 197, 255) 100%);
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--gradient-bg);
+      background-size: cover;
+      background-attachment: fixed;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0;
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    .main-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 2rem 1rem;
+      padding-bottom: 200px; /* Space for the tray */
+    }
+
+    .connect-badge {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 2rem;
+      backdrop-filter: blur(10px);
+      cursor: pointer;
+    }
+
+    .page-title {
+      font-size: 42px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 2rem;
+      text-align: center;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .prompt-pill {
+      background: #1a1b1e;
+      border-radius: 32px;
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      position: relative;
+    }
+
+    .prompt-pill .icon-btn {
+      background: transparent;
+      border: none;
+      color: #8b90a0;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .prompt-pill .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+    }
+
+    .prompt-input-wrapper {
+      flex: 1;
+      margin: 0 12px;
+    }
+
+    .prompt-pill input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 16px;
+      font-family: 'DM Sans', sans-serif;
+      outline: none;
+    }
+
+    .prompt-pill input::placeholder {
+      color: #666;
+    }
+
+    .build-dropdown {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: #8b90a0;
+      font-size: 13px;
+      font-weight: 500;
+      margin-right: 12px;
+      cursor: pointer;
+    }
+
+    .submit-btn {
+      background: #444;
+      color: #fff;
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .submit-btn.active {
+      background: #fff;
+      color: #000;
+    }
+
+    /* Bottom Tray */
+    .bottom-tray {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #141312;
+      border-top-left-radius: 24px;
+      border-top-right-radius: 24px;
+      padding: 24px 32px;
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
+      z-index: 100;
+    }
+
+    .tray-nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .tray-nav-item {
+      color: #8b90a0;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: 20px;
+      transition: all 0.2s;
+    }
+
+    .tray-nav-item.active {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .tray-nav-item:hover:not(.active) {
+      color: #fff;
+    }
+
+    .browse-all {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .template-carousel {
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      padding-bottom: 12px;
+      scrollbar-width: none;
+    }
+
+    .template-carousel::-webkit-scrollbar {
+      display: none;
+    }
+
+    .template-card {
+      min-width: 280px;
+      height: 160px;
+      background: #222;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: border 0.2s;
+      flex-shrink: 0;
+    }
+    
+    .template-card:hover {
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .template-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+    }
+
+    .template-card:hover img {
+      opacity: 1;
+    }
+
+    .template-info {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    }
+
+    .template-title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    /* Settings Modal */
+    .settings-btn {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      background: rgba(0,0,0,0.3);
+      border: none;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: #1a1b1e;
+      border-radius: 16px;
+      padding: 24px;
+      width: 100%;
+      max-width: 400px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Preserve Results styling */
+
+    .input-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 1rem; }
+    .api-row { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 1.25rem; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3); }
+    .field input { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; font-size: 13px; color: var(--text); outline: none; }
+    /* Keeping the rest of original CSS classes for results... */
+</style>
+</head>
+
+<body>  <button class="settings-btn" onclick="document.getElementById('settingsModal').style.display='flex'">⚙️ Settings</button>
+
+  <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this) this.style.display='none'">
+    <div class="modal-content">
+      <h3 style="margin-bottom: 1rem;">API Settings</h3>
+      <div class="api-row">
+        <div class="field">
+          <label>Azure OpenAI API Key</label>
+          <input type="password" id="apiKey" placeholder="Optional if set in .env" />
+        </div>
+        <div class="field">
+          <label>Azure Endpoint</label>
+          <input type="text" id="endpoint" placeholder="https://YOUR_RESOURCE.openai.azure.com/" />
+        </div>
+        <div class="field">
+          <label>API Version</label>
+          <input type="text" id="apiVersion" placeholder="2024-02-15-preview" />
+        </div>
+      </div>
+      <button style="background: var(--accent); color: #fff; padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; width: 100%;" onclick="document.getElementById('settingsModal').style.display='none'">Save</button>
+    </div>
+  </div>
+
+  <div class="main-wrapper">
+    <h1 class="page-title">What should we build, GIRISH?</h1>
+
+    <div class="prompt-pill">
+      <button class="icon-btn" onclick="document.getElementById('imageInput').click()">+</button>
+      <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload(event)" style="display:none;" />
+      <button class="icon-btn">📎</button>
+      
+      <div class="prompt-input-wrapper">
+        <input type="text" id="promptInput" placeholder="Ask AI to build a web app that..." oninput="updateSubmitBtn()" onkeydown="if(event.key==='Enter') analyzePrompt()" />
+      </div>
+
+      <div class="build-dropdown">Build ⌄</div>
+      <button class="icon-btn">🎤</button>
+      <button class="submit-btn" id="analyzeBtn" onclick="analyzePrompt()">&uarr;</button>
+    </div>
+
+    <div id="imagePreview" style="margin-top: 1rem; display: none; background: #1a1b1e; padding: 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+      <img id="previewImg" style="height: 60px; border-radius: 8px;" alt="Preview" />
+      <button onclick="clearImage()" style="background: transparent; border: none; color: #f56565; cursor: pointer; margin-left: 8px;">&times;</button>
+    </div>
+
+    <!-- Container for results so it respects width -->
+    <div class="container" style="margin-top: 2rem;">
+      <div id="resultArea">
+        <!-- Results will be injected here -->
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-tray">
+    <div class="tray-nav">
+      <div class="tray-nav-item active">Templates</div>
+      <div class="tray-nav-item browse-all" onclick="document.getElementById('allTemplatesModal').style.display='flex'">Browse all &rarr;</div>
+    </div>
+    <div class="template-carousel" id="templateCarousel">
+      <!-- Templates loaded via JS -->
+      <div style="color: #888;">Loading templates...</div>
+    </div>
+  </div>
+
+  <!-- All Templates Modal -->
+  <div class="modal-overlay" id="allTemplatesModal" style="display:none;" onclick="if(event.target===this) this.style.display='none'">
+    <div class="modal-content" style="max-width: 1000px; width: 90%; max-height: 90vh; display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px; margin-bottom: 16px;">
+        <h2>All Templates</h2>
+        <button class="icon-btn" onclick="document.getElementById('allTemplatesModal').style.display='none'" style="font-size: 20px;">✕</button>
+      </div>
+      <div id="allTemplatesGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; overflow-y: auto; flex: 1; padding: 10px;">
+        <!-- Loaded via JS -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ── Config ──────────────────────────────────────────────
+    const SYSTEM_PROMPT = `You are a prompt quality and safety filter for an AI-powered web application builder (like Bolt.new). Your job is to analyze user prompts BEFORE they are sent to the code generation LLM.
+
+Analyze the given prompt and return ONLY a valid JSON object with this exact structure:
+{
+  "verdict": "PASS" | "FAIL" | "WARN",
+  "safety_score": 0-100,
+  "clarity_score": 0-100,
+  "relevance_score": 0-100,
+  "overall_score": 0-100,
+  "flags": [],
+  "issues_summary": "one sentence summary of main issues, or empty string if none",
+  "improved_prompt": "rewritten improved version of the prompt if needed, or empty string if prompt is already good",
+  "clarifying_question": "If clarity is < 70, adopt a helpful, conversational AI agent persona (e.g., 'Hello! What would you like me to build for you today?') and ask a specific question to understand what the user wants. Otherwise empty string.",
+  "clarifying_options": ["If you are asking a multiple-choice question, provide 2-3 clickable options formatted as the user's reply. If you are asking the user to type open-ended details like their name, bio, or specific features, this MUST be an empty array []."],
+  "explanation": "2-3 sentence explanation of the verdict and what was found",
+  "can_proceed": true | false
+}
+
+Scoring guide:
+- safety_score: 100=fully safe, 0=dangerous/harmful content
+- clarity_score: 100=perfectly clear specific request of WHAT to build including content details, 0=completely vague. CRITICAL: If the prompt asks for a generic app (e.g., "a portfolio", "an e-commerce site") but lacks specific content details (e.g., name, profession, products, brand name), clarity_score MUST be < 70 so you can ask a follow-up question for those details. If it contains ONLY code snippets or random text without explicit instructions on what web app/UI to build, clarity_score MUST be < 50.
+- relevance_score: 100=directly relevant to web/app building, 0=totally off-topic
+- overall_score: weighted average (safety 40%, clarity 35%, relevance 25%)
+- verdict: PASS if overall>=70 and safety>=80, WARN if overall>=50 or safety>=60, FAIL otherwise
+- can_proceed: true only if verdict is PASS
+- flags: array of short labels from: ["vague", "offensive", "off-topic", "spam", "incomplete", "malformed", "harmful", "ambiguous", "duplicate", "too-broad"]
+- improved_prompt: provide only if clarity_score < 70, otherwise empty string
+
+Return ONLY the JSON. No markdown, no backticks, no explanation outside JSON.`;
+
+    // ── DOM helpers ──────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+
+    $('promptInput').addEventListener('input', () => {
+      $('charCount').textContent = $('promptInput').value.length + ' chars';
+    });
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        if (cfg.endpoint) $('endpoint').value = cfg.endpoint;
+        if (cfg.apiVersion) $('apiVersion').value = cfg.apiVersion;
+      } catch (e) {
+        console.warn('Failed to load config', e);
+      }
+    }
+
+    function setExample(text) {
+      $('promptInput').value = text;
+      $('charCount').textContent = text.length + ' chars';
+      $('resultArea').innerHTML = `<div class="empty-state"><div class="empty-icon">🛡️</div><div>Click <strong>Analyze Prompt</strong> to run the filter pipeline</div></div>`;
+    }
+
+    // load server config for endpoint/version
+    loadConfig();
+
+    // ── Scoring helpers ──────────────────────────────────────
+    function scoreColor(s) {
+      return s >= 70 ? 'c-green' : s >= 50 ? 'c-amber' : 'c-red';
+    }
+    function scoreFill(s) {
+      return s >= 70 ? 'fill-green' : s >= 50 ? 'fill-amber' : 'fill-red';
+    }
+
+    // ── Image upload handlers ────────────────────────────────
+    let selectedImage = null;
+
+    function handleImageUpload(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file.');
+        return;
+      }
+
+      if (file.size > 20 * 1024 * 1024) {
+        alert('Image file must be smaller than 20MB.');
+        return;
+      }
+
+      selectedImage = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        $('previewImg').src = e.target.result;
+        $('imagePreview').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearImage() {
+      selectedImage = null;
+      $('imageInput').value = '';
+      $('imagePreview').style.display = 'none';
+      $('previewImg').src = '';
+    }
+
+    // ── Main analysis (analyzes AND generates plan simultaneously) ────────────────────────────────────────
+    async function analyzePrompt(autoGenerate = false) {
+      const prompt = $('promptInput').value.trim();
+      if (!prompt) { alert('Please enter a prompt to analyze.'); return; }
+
+      const btn = $('analyzeBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<div class="spinner"></div> Analyzing & Generating Plan…`;
+
+      $('resultArea').innerHTML = `
+      <div class="skeleton-card">
+        <div class="skeleton-line" style="width:40%"></div>
+        <div class="skeleton-line" style="width:80%"></div>
+        <div class="skeleton-line" style="width:60%"></div>
+        <div class="skeleton-line" style="width:90%; margin-top:16px"></div>
+        <div class="skeleton-line" style="width:75%"></div>
+      </div>`;
+
+      try {
+        // Prepare request body
+        let body;
+        let contentType = 'application/json';
+
+        if (selectedImage) {
+          // Use FormData for image upload
+          const formData = new FormData();
+          formData.append('prompt', prompt);
+          formData.append('image', selectedImage);
+          body = formData;
+          contentType = null; // Let browser set Content-Type for FormData
+        } else {
+          // Use JSON for text-only prompt
+          body = JSON.stringify({ prompt });
+        }
+
+        // Call the combined endpoint for simultaneous filter + plan
+        const response = await fetch('/api/analyze-and-plan', {
+          method: 'POST',
+          headers: contentType ? { 'Content-Type': contentType } : {},
+          body: body
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Analysis failed');
+
+        if (autoGenerate && data.filter && !data.filter.can_proceed) {
+          // Do not render the failed filter UI, just fetch force-plan silently
+          try {
+            let forceBody;
+            if (state.imageFile) {
+              forceBody = new FormData();
+              forceBody.append('prompt', prompt);
+              forceBody.append('image', state.imageFile);
+              forceBody.append('force', 'true');
+            } else {
+              forceBody = JSON.stringify({ prompt, force: true });
+            }
+            const forceRes = await fetch('/api/analyze-and-plan', {
+              method: 'POST',
+              headers: contentType ? { 'Content-Type': contentType } : {},
+              body: forceBody
+            });
+            const forceData = await forceRes.json();
+            if (forceData.plan) {
+              forceData.filter = { can_proceed: true, verdict: 'PASS' };
+              renderBothResults(forceData);
+              setTimeout(() => generateCode(), 500);
+            }
+          } catch(e) {}
+        } else {
+          // Normal rendering
+          renderBothResults(data);
+          if (autoGenerate && data.filter && data.filter.can_proceed) {
+            setTimeout(() => generateCode(), 500);
+          }
+        }
+      } catch (err) {
+        renderError(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Analyze Prompt`;
+      }
+    }
+
+    // ── Render both filter result and plan together ──────────
+    function renderBothResults(data) {
+      lastPipelineData = data;
+      const filter = data.filter;
+      const plan = data.plan;
+      if (!filter) { renderError('No analysis received'); return; }
+
+      const vc = filter.verdict.toLowerCase(); // pass | fail | warn
+      const icon = vc === 'pass' ? '✓' : vc === 'fail' ? '✕' : '!';
+
+      const flagsHTML = filter.flags && filter.flags.length
+        ? `<div class="divider"></div>
+         <div class="section-label">Detected flags</div>
+         <div class="flags-wrap">${filter.flags.map(f => `<span class="flag-tag">${f}</span>`).join('')}</div>`
+        : '';
+
+      const suggestionHTML = (filter.improved_prompt_options && filter.improved_prompt_options.length)
+        ? `<div class="divider"></div>
+        <div class="section-label">Suggested improvements</div>
+        <div class="flags-wrap">${filter.improved_prompt_options.map((s, i) => `<button class="ex-pill" onclick="applySuggestion(${i})">${s}</button>`).join('')}</div>`
+        : filter.improved_prompt
+          ? `<div class="divider"></div>
+          <div class="section-label">Suggested improvement</div>
+          <div class="suggestion-box">${filter.improved_prompt}</div>`
+          : '';
+
+      // Render filter card - if clarity is low, hide the scores and only show the clarification options.
+      let html = '';
+      if (filter.clarifying_question) {
+        let optionsHTML = '';
+        if (filter.clarifying_options && filter.clarifying_options.length) {
+          const btns = filter.clarifying_options.map(opt => `<button onclick="submitClarificationOption('${opt.replace(/'/g, "\\'")}')" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 8px; padding: 10px 14px; text-align: left; cursor: pointer; font-size: 13px; font-family: 'DM Sans', sans-serif;">${opt}</button>`).join('');
+          optionsHTML = `<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">${btns}</div>`;
+        }
+
+        html = `
+        <div class="result-card">
+          <div class="result-header">
+            <div class="verdict-icon warn">!</div>
+            <span class="result-title">Clarification Needed</span>
+            <span class="verdict-badge warn">WARN</span>
+          </div>
+          <div class="result-body">
+            <div class="suggestion-box" style="border-color: rgba(246,173,85,0.4); background: rgba(246,173,85,0.1); color: #fbd38d; padding: 16px;">
+              <strong style="font-size: 15px;">AI asks:</strong> <span style="font-size: 14px;">${filter.clarifying_question}</span>
+              ${optionsHTML}
+              <div style="margin-top: 16px; border-top: 1px solid rgba(246,173,85,0.2); padding-top: 16px;">
+                <div style="font-size: 12px; margin-bottom: 8px; font-weight: 600; text-transform: uppercase;">Or type your own explanation:</div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <textarea id="clarificationInput" placeholder="Type your explanation here to clarify the prompt..." style="width: 100%; min-height: 60px; background: rgba(0,0,0,0.25); border: 1px solid rgba(246,173,85,0.3); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #e8eaf0; resize: vertical;"></textarea>
+                  <button onclick="submitClarification()" style="align-self: flex-start; background: #f6ad55; color: #1a202c; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer;">Submit Clarification</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      } else {
+        html = `
+        <div class="result-card">
+          <div class="result-header">
+            <div class="verdict-icon ${vc}">${icon}</div>
+            <span class="result-title">Analysis complete</span>
+            <span class="verdict-badge ${vc}">${filter.verdict}</span>
+            <div class="overall-score">${filter.overall_score}<span>/100</span></div>
+          </div>
+          <div class="result-body">
+            <div class="score-grid">
+              <div class="score-cell">
+                <div class="s-label">Safety</div>
+                <div class="s-val ${scoreColor(filter.safety_score)}">${filter.safety_score}</div>
+                <div class="s-bar"><div class="s-bar-fill ${scoreFill(filter.safety_score)}" style="width:${filter.safety_score}%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="s-label">Clarity</div>
+                <div class="s-val ${scoreColor(filter.clarity_score)}">${filter.clarity_score}</div>
+                <div class="s-bar"><div class="s-bar-fill ${scoreFill(filter.clarity_score)}" style="width:${filter.clarity_score}%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="s-label">Relevance</div>
+                <div class="s-val ${scoreColor(filter.relevance_score)}">${filter.relevance_score}</div>
+                <div class="s-bar"><div class="s-bar-fill ${scoreFill(filter.relevance_score)}" style="width:${filter.relevance_score}%"></div></div>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div class="section-label">Analysis</div>
+            <div class="explanation-text">${filter.explanation}</div>
+            ${flagsHTML}
+            ${suggestionHTML}
+          </div>
+        </div>`;
+      }
+
+      // Render plan card if available (with sub-classification embedded)
+      if (plan) {
+        html += renderPlanCard(plan, data.sub_classification);
+      }
+
+      // Add container for generation steps animation (always show)
+      if (plan) {
+        html += `<div id="stepsMount"></div>`;
+      }
+
+      $('resultArea').innerHTML = html;
+
+      // Kick off the animated "generation steps" pipeline (always run)
+      if (plan) {
+        runGenerationPipeline(data);
+      }
+    }
+
+    function submitClarificationOption(opt) {
+      const promptEl = document.getElementById('promptInput');
+      promptEl.value = promptEl.value.trim() + "\\n\\nUser clarification: I want " + opt;
+      document.getElementById('charCount').textContent = promptEl.value.length + ' chars';
+      analyzePrompt();
+    }
+
+    // ── NEW: Handle Clarification Submit ────────────────────────────────
+    function submitClarification() {
+      const input = document.getElementById('clarificationInput');
+      if (!input || !input.value.trim()) return;
+      const promptEl = document.getElementById('promptInput');
+      promptEl.value = promptEl.value.trim() + "\\n\\nUser clarification: " + input.value.trim();
+      document.getElementById('charCount').textContent = promptEl.value.length + ' chars';
+      analyzePrompt();
+    }
+
+    // ── Generation steps pipeline (cosmetic animation) ─────────────────
+    async function runGenerationPipeline(data) {
+      const steps = [
+        { id: 'filter', label: 'Filtering & validating prompt', dur: 500 },
+        { id: 'plan', label: 'Generating site structure via AI', dur: 700 },
+        { id: 'subclass', label: 'Sub-classifying sections into columns', dur: 800 },
+        { id: 'palette', label: 'Applying color palette & typography', dur: 600 },
+        { id: 'finalize', label: 'Finalizing layout blueprint', dur: 500 },
+        { id: 'codegen', label: 'Preparing code generator blueprint', dur: 800 },
+      ];
+
+      const mount = $('stepsMount');
+      mount.innerHTML = `
+      <div class="steps-card">
+        <div class="steps-title">⚙️ Generation Pipeline</div>
+        <div id="stepsList">
+          ${steps.map((s, i) => `
+            <div class="step-row" id="step-${s.id}">
+              <div class="step-icon">${i + 1}</div>
+              <div class="step-text">${s.label}</div>
+              <div class="step-meta" id="meta-${s.id}">queued</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+      for (const s of steps) {
+        const row = document.getElementById('step-' + s.id);
+        const meta = document.getElementById('meta-' + s.id);
+        row.classList.add('active');
+        meta.innerHTML = `<span class="step-spin"></span>`;
+        await new Promise(r => setTimeout(r, s.dur));
+        row.classList.remove('active');
+        row.classList.add('done');
+        row.querySelector('.step-icon').textContent = '✓';
+        meta.textContent = 'done';
+      }
+
+      // Show completion banner
+      mount.innerHTML += `
+      <div class="completion-banner" id="completionBanner">
+        <div class="completion-icon">✅</div>
+        <div class="completion-title">Generation Plan Complete</div>
+        <div class="completion-sub" style="margin-bottom: 16px;">All sections have been analyzed, structured, and sub-classified by AI.<br>The detailed blueprint above is ready for code generation.</div>
+        <button class="proceed-btn btn-go" onclick="generateCode()" style="margin: 0 auto; max-width: 320px;">
+          ⚡ Generate Code Files
+        </button>
+      </div>`;
+    }
+
+    // ── NEW: Live website overview preview ──────────────────────
+    function renderWebsiteOverview(data) {
+      const overview = data.overview;
+      const plan = data.plan || {};
+      const colors = plan.color_scheme || {
+        primary: '#4f8ef7', secondary: '#3b6fd1', accent: '#3ecf8e',
+        background: '#ffffff', text: '#111827',
+      };
+
+      if (!overview) {
+        $('overviewMount').innerHTML = `
+        <div class="overview-wrap">
+          <div class="overview-label">🌐 Website Overview</div>
+          <div class="suggestion-box">Overview unavailable — try refining your prompt.</div>
+        </div>`;
+        return;
+      }
+
+      const fb = overview._fallback ? `<span class="ov-chip">heuristic</span>` : `<span class="ov-chip">ai-generated</span>`;
+      const navLinks = (overview.nav_links || []).slice(0, 5).map(l => `<span>${l}</span>`).join('');
+      const features = (overview.features || []).slice(0, 3).map(f => `
+      <div class="ov-feat">
+        <div class="ov-feat-icon">${f.icon || '✦'}</div>
+        <div class="ov-feat-title">${f.title || ''}</div>
+        <div class="ov-feat-desc">${f.description || ''}</div>
+      </div>`).join('');
+      const stats = (overview.stats || []).slice(0, 3).map(s => `
+      <div class="ov-stat">
+        <div class="ov-stat-val" style="color:${colors.primary}">${s.value || ''}</div>
+        <div class="ov-stat-lbl">${s.label || ''}</div>
+      </div>`).join('');
+
+      const slug = (overview.brand_name || 'site').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+      $('overviewMount').innerHTML = `
+      <div class="overview-wrap">
+        <div class="overview-label">🌐 Website Overview <span class="ov-chip">${plan.project_type || 'site'}</span> ${fb}</div>
+        <div class="overview-frame">
+          <div class="ov-browser-bar">
+            <div class="ov-dot r"></div><div class="ov-dot y"></div><div class="ov-dot g"></div>
+            <div class="ov-url">https://${slug}.app</div>
+          </div>
+          <div class="ov-site" style="background:${colors.background};color:${colors.text}">
+            <div class="ov-nav">
+              <div class="ov-brand" style="color:${colors.primary}">${overview.brand_name}</div>
+              <div class="ov-nav-links">${navLinks}</div>
+              <div class="ov-nav-cta" style="background:${colors.primary};color:#fff">${overview.hero?.primary_cta || 'Start'}</div>
+            </div>
+            <div class="ov-hero">
+              ${overview.hero?.eyebrow ? `<div class="ov-eyebrow" style="color:${colors.accent}">${overview.hero.eyebrow}</div>` : ''}
+              <div class="ov-headline">${overview.hero?.headline || overview.tagline || ''}</div>
+              <div class="ov-sub">${overview.hero?.subheadline || ''}</div>
+              <div class="ov-ctas">
+                <div class="ov-btn primary" style="background:${colors.primary}">${overview.hero?.primary_cta || 'Get Started'}</div>
+                <div class="ov-btn secondary" style="color:${colors.primary}">${overview.hero?.secondary_cta || 'Learn More'}</div>
+              </div>
+            </div>
+            ${stats ? `<div class="ov-stats">${stats}</div>` : ''}
+            ${features ? `<div class="ov-features">${features}</div>` : ''}
+            <div class="ov-footer">${overview.footer_note || ''}</div>
+          </div>
+        </div>
+        <div class="ov-meta-row">
+          <span class="ov-chip">brand: ${overview.brand_name}</span>
+          <span class="ov-chip">tagline: ${overview.tagline || '—'}</span>
+          <span class="ov-chip">stack: ${plan.tech_stack?.framework || '—'} · ${plan.tech_stack?.styling || '—'}</span>
+        </div>
+      </div>`;
+    }
+
+
+
+    function renderPlanCard(plan, subClassification) {
+      console.log('[renderPlanCard] plan:', plan);
+      console.log('[renderPlanCard] subClassification:', subClassification);
+      console.log('[renderPlanCard] plan.sections:', plan.sections);
+
+      // Build sub-classification lookup map
+      const subMap = {};
+      if (subClassification && subClassification.sections) {
+        subClassification.sections.forEach(s => { subMap[s.section_id] = s; });
+      }
+
+      const colorSwatches = plan.color_scheme
+        ? Object.entries(plan.color_scheme)
+          .map(([k, v]) => `<div class="color-swatch"><div class="swatch-circle" style="background:${v}" title="${v}"></div><div class="swatch-label">${k}</div></div>`)
+          .join('')
+        : '';
+
+      let sectionsHTML = '';
+      if (plan.sections && plan.sections.length) {
+        try {
+          sectionsHTML = plan.sections.map(sec => {
+            const sub = subMap[sec.id];
+            let subHTML = '';
+            try { subHTML = sub ? renderSectionSubClass(sub) : ''; } catch (e) { console.warn('Sub-class render error for', sec.id, e); }
+            const comps = Array.isArray(sec.components) ? sec.components.join(', ') : (sec.components || 'N/A');
+            return `
+          <div class="section-item">
+            <div class="section-order">${sec.order || '•'}</div>
+            <div class="section-content">
+              <div class="section-name">${sec.name || 'Unnamed Section'}</div>
+              <div class="section-type-badge">${sec.type || 'section'}</div>
+              <div class="section-desc">${sec.description || ''}</div>
+              <div class="section-components"><strong>Components:</strong> ${comps}</div>
+              ${subHTML}
+            </div>
+          </div>`;
+          }).join('');
+        } catch (e) {
+          console.error('[renderPlanCard] Error rendering sections:', e);
+          sectionsHTML = `<div style="color:var(--red);font-size:12px;">Error rendering sections: ${e.message}</div>`;
+        }
+      }
+
+      return `
+      <div class="plan-card">
+        <div class="plan-header">
+          <div class="plan-label">${plan.project_type || 'WEB_APP'}</div>
+          <div class="plan-title">${plan.project_title || 'Web Application'}</div>
+          <div class="plan-complexity">Estimated complexity: <strong>${plan.estimated_complexity || 'moderate'}</strong></div>
+        </div>
+        <div class="plan-body">
+          ${plan.tech_stack ? `
+            <div class="plan-section">
+              <div class="plan-section-label">🛠️ TECH STACK</div>
+              <div class="tech-grid">
+                <div class="tech-item">
+                  <div class="tech-label">Framework</div>
+                  <div class="tech-value">${plan.tech_stack.framework || '-'}</div>
+                </div>
+                <div class="tech-item">
+                  <div class="tech-label">Styling</div>
+                  <div class="tech-value">${plan.tech_stack.styling || '-'}</div>
+                </div>
+                ${plan.tech_stack.extras && plan.tech_stack.extras.length ? `
+                <div class="tech-item" style="grid-column: 1/-1">
+                  <div class="tech-label">Libraries</div>
+                  <div class="tech-value">${plan.tech_stack.extras.join(', ')}</div>
+                </div>` : ''}
+              </div>
+            </div>` : ''}
+
+          ${plan.color_scheme ? `
+            <div class="plan-section">
+              <div class="plan-section-label">🎨 COLOR SCHEME</div>
+              <div class="colors-grid">${colorSwatches}</div>
+            </div>` : ''}
+
+          ${plan.sections && plan.sections.length ? `
+            <div class="plan-section">
+              <div class="plan-section-label">📄 PAGE SECTIONS (${plan.sections.length}) ${subClassification ? '<span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3);font-size:10px;">with AI sub-classification</span>' : ''}</div>
+              <div class="sections-list">${sectionsHTML}</div>
+            </div>` : '<div class="plan-section"><div class="plan-section-label">📄 PAGE SECTIONS</div><div style="color:var(--text3);font-size:12px;">No sections generated — the LLM may have returned an incomplete plan.</div></div>'}
+
+          ${plan.summary ? `
+            <div class="plan-section">
+              <div class="plan-section-label">Summary</div>
+              <div class="plan-summary">${plan.summary}</div>
+            </div>` : ''}
+        </div>
+      </div>`;
+    }
+
+    function renderSectionSubClass(sub) {
+      if (!sub || !sub.columns || !sub.columns.length) return '';
+      const colCount = Math.min(sub.columns.length, 4);
+      return `
+      <div class="subclass-label">${sub.layout_type || 'layout'} breakdown • ${sub.columns.length} ${sub.columns.length === 1 ? 'block' : 'blocks'}</div>
+      <div class="subclass-grid" style="grid-template-columns: repeat(${colCount}, 1fr)">
+        ${sub.columns.map(col => {
+        const contentHint = col.content && col.content.heading ? `<div class="subclass-col-content">${col.content.heading}</div>` : '';
+        const itemsHint = col.content && col.content.items && col.content.items.length
+          ? `<div class="subclass-col-content" style="color:var(--text3);font-weight:400;">${col.content.items.join(' · ')}</div>` : '';
+        return `
+          <div class="subclass-col">
+            <div class="subclass-col-pos">${col.position || ''}</div>
+            <div class="subclass-col-name">${col.name || 'Column'}</div>
+            <div class="subclass-col-role">${col.role || ''}</div>
+            <div class="subclass-col-components">${(col.components || []).join(' · ')}</div>
+            ${contentHint}
+            ${itemsHint}
+          </div>`;
+      }).join('')}
+      </div>`;
+    }
+
+    // ── Render error ─────────────────────────────────────────
+    function renderError(msg) {
+      $('resultArea').innerHTML = `
+      <div class="result-card">
+        <div class="result-header">
+          <div class="verdict-icon fail">✕</div>
+          <span class="result-title">Analysis failed</span>
+          <span class="verdict-badge fail">ERROR</span>
+        </div>
+        <div class="result-body">
+          <div class="explanation-text" style="color:var(--red)">${msg || 'Unknown error'}</div>
+          <div style="margin-top:10px;font-size:12px;color:var(--text3)">Check your API key, endpoint, and API version above, then try again.</div>
+        </div>
+      </div>`;
+    }
+
+    // ── Actions ──────────────────────────────────────────────
+    let lastFilter = null;
+    let lastPipelineData = null;
+    let generatedFiles = null;
+
+    function handleProceed() {
+      generatePlan();
+    }
+
+    function revise() {
+      $('promptInput').focus();
+      $('promptInput').select();
+    }
+
+    // ── Plan generation ──────────────────────────────────────
+    async function generatePlan() {
+      const prompt = $('promptInput').value.trim();
+      if (!prompt) return;
+
+      const btn = document.querySelector('.btn-plan') || { innerHTML: '' };
+      const originalHTML = btn.innerHTML;
+      btn.disabled = true;
+      if (btn.innerHTML !== undefined) btn.innerHTML = `<div class="spinner"></div> Generating Plan…`;
+
+      $('resultArea').innerHTML = `
+      <div class="skeleton-card">
+        <div class="skeleton-line" style="width:60%"></div>
+        <div class="skeleton-line" style="width:100%"></div>
+        <div class="skeleton-line" style="width:80%"></div>
+        <div class="skeleton-line" style="width:90%; margin-top:16px"></div>
+      </div>`;
+
+      try {
+        let body;
+        let contentType = 'application/json';
+
+        if (selectedImage) {
+          const formData = new FormData();
+          formData.append('prompt', prompt);
+          formData.append('image', selectedImage);
+          body = formData;
+          contentType = null;
+        } else {
+          body = JSON.stringify({ prompt });
+        }
+
+        const response = await fetch('/api/analyze-and-plan', {
+          method: 'POST',
+          headers: contentType ? { 'Content-Type': contentType } : {},
+          body: body
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Plan generation failed');
+
+        renderPlan(data);
+      } catch (err) {
+        renderError(err.message);
+      } finally {
+        btn.disabled = false;
+        if (btn.innerHTML !== undefined) btn.innerHTML = originalHTML;
+      }
+    }
+
+    function renderPlan(data) {
+      lastPipelineData = data;
+      const plan = data.plan;
+      if (!plan) {
+        renderError('No plan generated. Try refining your prompt.');
+        return;
+      }
+
+      const vc = data.filter.verdict.toLowerCase();
+      const icon = vc === 'pass' ? '✓' : vc === 'fail' ? '✕' : '!';
+
+      const colorSwatches = plan.color_scheme
+        ? Object.entries(plan.color_scheme)
+          .map(([k, v]) => `<div style="position:relative;margin-bottom:20px;"><div class="color-swatch" style="background:${v}" title="${k}=${v}"></div><div class="color-label">${k}</div></div>`)
+          .join('')
+        : '';
+
+      const techStack = plan.tech_stack
+        ? `<div class="plan-section">
+           <div class="plan-section-title">🛠️ Tech Stack</div>
+           <div class="tech-grid">
+             <div class="tech-item"><div class="tech-label">Framework</div>${plan.tech_stack.framework || 'N/A'}</div>
+             <div class="tech-item"><div class="tech-label">Styling</div>${plan.tech_stack.styling || 'N/A'}</div>
+             ${plan.tech_stack.extras && plan.tech_stack.extras.length ? `<div class="tech-item" style="grid-column:1/-1;"><div class="tech-label">Libraries</div>${plan.tech_stack.extras.join(', ')}</div>` : ''}
+           </div>
+         </div>`
+        : '';
+
+      const colorScheme = plan.color_scheme
+        ? `<div class="plan-section">
+           <div class="plan-section-title">🎨 Color Scheme</div>
+           <div class="color-palette">${colorSwatches}</div>
+         </div>`
+        : '';
+
+      const sections = plan.sections
+        ? `<div class="plan-section">
+           <div class="plan-section-title">📋 Page Sections (${plan.sections.length})</div>
+           <div class="sections-list">${plan.sections.map(s => `
+             <div class="section-item">
+               <div style="display:flex;align-items:center;margin-bottom:6px;">
+                 <span class="section-order">${s.order}</span>
+                 <div class="section-name">${s.name}</div>
+                 <span class="section-type">${s.type}</span>
+               </div>
+               <div class="section-desc">${s.description}</div>
+               <div class="section-components"><strong>Components:</strong> ${s.components.join(', ')}</div>
+             </div>
+           `).join('')}</div>
+         </div>`
+        : '';
+
+      const summary = plan.summary
+        ? `<div class="plan-section">
+           <div class="divider"></div>
+           <div class="section-label">Summary</div>
+           <div class="explanation-text">${plan.summary}</div>
+         </div>`
+        : '';
+
+      async function generateCode() {
+        const prompt = $('promptInput').value.trim();
+        if (!prompt || !lastPipelineData || !lastPipelineData.plan) {
+          alert('Please analyze a prompt and generate a plan first.');
+          return;
+        }
+
+        // Check if code viewer container already exists, if not create it
+        let mount = $('codeViewerMount');
+        if (!mount) {
+          mount = document.createElement('div');
+          mount.id = 'codeViewerMount';
+          $('resultArea').appendChild(mount);
+        }
+
+        // Initialize the code viewer UI container shell
+        initCodeViewerUI();
+
+        // Scroll to code viewer skeleton
+        mount.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // Disable buttons to prevent double-clicks
+        const bannerBtn = document.querySelector('#completionBanner .btn-go');
+        if (bannerBtn) {
+          bannerBtn.disabled = true;
+          bannerBtn.innerHTML = `<span class="spinner"></span> Generating...`;
+        }
+        const planBtn = document.querySelector('.plan-card .btn-go');
+        if (planBtn) {
+          planBtn.disabled = true;
+          planBtn.innerHTML = `<span class="spinner"></span> Generating...`;
+        }
+
+        // Initialize empty global files object
+        generatedFiles = { 'index.html': '', 'styles.css': '', 'script.js': '' };
+        activeTab = 1; // start with index.html tab active
+
+        try {
+          // Stream index.html
+          await streamFileCode('index.html', 1, 'html');
+
+          // Stream styles.css
+          const cssBtn = document.getElementById('tab-btn-2');
+          if (cssBtn) cssBtn.innerHTML = '🎨 styles.css ⚡';
+          await streamFileCode('styles.css', 2, 'css');
+
+          // Stream script.js
+          const jsBtn = document.getElementById('tab-btn-3');
+          if (jsBtn) jsBtn.innerHTML = '⚡ script.js ⚡';
+          await streamFileCode('script.js', 3, 'javascript');
+
+          // Enable actions and Live Preview tab
+          const previewBtn = document.getElementById('tab-btn-0');
+          if (previewBtn) {
+            previewBtn.disabled = false;
+            previewBtn.innerHTML = '🌐 Live Preview';
+          }
+
+          const actionsArea = document.getElementById('viewerActionsArea');
+          if (actionsArea) actionsArea.style.display = 'flex';
+
+          const badge = document.getElementById('generationStatusBadge');
+          if (badge) {
+            badge.className = 'code-viewer-badge ai';
+            badge.textContent = 'ai-generated';
+          }
+
+          // Switch to Live Preview on completion
+          switchCodeTab(0);
+        } catch (err) {
+          mount.innerHTML = `
+        <div class="result-card" style="margin-top: 1.5rem;">
+          <div class="result-header">
+            <div class="verdict-icon fail">✕</div>
+            <span class="result-title">Code Generation Failed</span>
+            <span class="verdict-badge fail">ERROR</span>
+          </div>
+          <div class="result-body">
+            <div class="explanation-text" style="color:var(--red)">${err.message || 'Unknown error occurred'}</div>
+            <div style="margin-top:10px;font-size:12px;color:var(--text3)">Make sure the server is running and Azure OpenAI credentials are correct.</div>
+          </div>
+        </div>`;
+        } finally {
+          if (bannerBtn) {
+            bannerBtn.disabled = false;
+            bannerBtn.innerHTML = `⚡ Generate Code Files`;
+          }
+          if (planBtn) {
+            planBtn.disabled = false;
+            planBtn.innerHTML = `▶ Proceed to Code Generation`;
+          }
+        }
+      }
+
+      function initCodeViewerUI() {
+        const mount = $('codeViewerMount');
+        if (!mount) return;
+
+        const projectTitle = lastPipelineData?.plan?.project_title || 'Generated Project';
+
+        mount.innerHTML = `
+      <div class="code-viewer-card">
+        <div class="code-viewer-header">
+          <div class="code-viewer-title">
+            💻 Production Code: ${projectTitle}
+            <span class="code-viewer-badge fallback" id="generationStatusBadge">generating...</span>
+          </div>
+          <div class="code-viewer-actions" style="display: none;" id="viewerActionsArea">
+            <button class="code-action-btn" id="copyCodeBtn" onclick="copyActiveCode()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg> Copy
+            </button>
+            <button class="code-action-btn" onclick="downloadZip()" style="background: var(--accent-dim); border-color: rgba(79, 142, 247, 0.25); color: var(--accent);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg> Download ZIP
+            </button>
+          </div>
+        </div>
+        <div class="code-tabs-container" id="codeTabsContainer">
+          <button class="code-tab" id="tab-btn-0" disabled onclick="switchCodeTab(0)">🌐 Live Preview (queued)</button>
+          <button class="code-tab active" id="tab-btn-1" onclick="switchCodeTab(1)">📄 index.html ⚡</button>
+          <button class="code-tab" id="tab-btn-2" onclick="switchCodeTab(2)">🎨 styles.css 💤</button>
+          <button class="code-tab" id="tab-btn-3" onclick="switchCodeTab(3)">⚡ script.js 💤</button>
+        </div>
+        <div class="code-content-wrapper" id="codeContentArea">
+          <div class="code-pre-container">
+            <div class="line-numbers-gutter" id="streamingGutter"><span>1</span></div>
+            <pre class="code-pre"><code class="language-html" id="codeBlock">Generating index.html...</code></pre>
+          </div>
+        </div>
+      </div>`;
+      }
+
+      async function streamFileCode(filename, tabIdx, language) {
+        // Switch active tab visually
+        switchCodeTab(tabIdx);
+
+        const tabBtn = document.getElementById('tab-btn-' + tabIdx);
+        if (tabBtn) {
+          tabBtn.innerHTML = (tabIdx === 1 ? '📄 ' : tabIdx === 2 ? '🎨 ' : '⚡ ') + filename + ' ⚡';
+        }
+
+        generatedFiles[filename] = '';
+        const codeBlock = document.getElementById('codeBlock');
+        const gutter = document.getElementById('streamingGutter');
+        if (codeBlock) codeBlock.textContent = '';
+        if (gutter) gutter.innerHTML = '';
+
+        const prompt = $('promptInput').value.trim();
+        const payload = {
+          prompt,
+          plan: lastPipelineData.plan,
+          sub_classification: lastPipelineData.sub_classification,
+          filename
+        };
+
+        const response = await fetch('/api/generate-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to generate ${filename}: status ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data: ')) continue;
+
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              if (data.type === 'token') {
+                generatedFiles[filename] += data.content;
+
+                if (codeBlock) {
+                  codeBlock.textContent = generatedFiles[filename];
+                }
+
+                if (gutter) {
+                  const lineCount = generatedFiles[filename].split('\n').length;
+                  gutter.innerHTML = Array.from({ length: lineCount }, (_, i) => `<span>${i + 1}</span>`).join('');
+                }
+              } else if (data.type === 'error') {
+                throw new Error(data.message);
+              }
+            } catch (e) {
+              console.warn('Failed to parse SSE chunk:', line, e);
+            }
+          }
+        }
+
+        if (codeBlock && window.Prism) {
+          Prism.highlightElement(codeBlock);
+        }
+
+        if (tabBtn) {
+          tabBtn.innerHTML = (tabIdx === 1 ? '📄 ' : tabIdx === 2 ? '🎨 ' : '⚡ ') + filename + ' ✓';
+        }
+      }
+
+      let activeTab = 0; // 0 = Preview, 1 = index.html, 2 = styles.css, 3 = script.js
+
+      function switchCodeTab(tabIndex) {
+        activeTab = tabIndex;
+
+        const tabElements = document.querySelectorAll('.code-tab');
+        tabElements.forEach((el, idx) => {
+          if (idx === tabIndex) el.classList.add('active');
+          else el.classList.remove('active');
+        });
+
+        const container = $('codeContentArea');
+        if (!container || !generatedFiles) return;
+
+        const copyBtn = $('copyCodeBtn');
+        if (tabIndex === 0) {
+          if (copyBtn) copyBtn.style.display = 'none';
+
+          const indexFile = generatedFiles['index.html'] || '';
+          const cssFile = generatedFiles['styles.css'] || '';
+          const jsFile = generatedFiles['script.js'] || '';
+
+          let combined = indexFile;
+          if (combined.includes('href="styles.css"')) {
+            combined = combined.replace(/<link[^>]*href="styles.css"[^>]*>/i, `<style>${cssFile}</style>`);
+          } else if (combined.includes("href='styles.css'")) {
+            combined = combined.replace(/<link[^>]*href='styles.css'[^>]*>/i, `<style>${cssFile}</style>`);
+          } else {
+            combined = combined.replace('</head>', `<style>${cssFile}</style></head>`);
+          }
+
+          if (combined.includes('src="script.js"')) {
+            combined = combined.replace(new RegExp('<script[^>]*src="script.js"[^>]*><\\/script>', 'i'), '<script>' + jsFile + '</s' + 'cript>');
+          } else if (combined.includes("src='script.js'")) {
+            combined = combined.replace(new RegExp("<script[^>]*src='script.js'[^>]*><\\/script>", 'i'), '<script>' + jsFile + '</s' + 'cript>');
+          } else {
+            combined = combined.replace('</body>', '<script>' + jsFile + '</s' + 'cript></body>');
+          }
+
+          container.innerHTML = `
+          <div class="preview-iframe-container">
+            <iframe class="preview-iframe" id="previewFrame"></iframe>
+          </div>`;
+
+          const iframe = $('previewFrame');
+          if (iframe) {
+            const doc = iframe.contentWindow || iframe.contentDocument?.document || iframe.contentDocument;
+            doc.document.open();
+            doc.document.write(combined);
+            doc.document.close();
+          }
+        } else {
+          if (copyBtn) copyBtn.style.display = 'flex';
+
+          let fileIndex = tabIndex - 1;
+          const fileNames = ['index.html', 'styles.css', 'script.js'];
+          const targetName = fileNames[fileIndex];
+          const content = generatedFiles[targetName] || '';
+          const languages = ['html', 'css', 'javascript'];
+
+          const lineCount = content.split('\n').length;
+          const gutterHTML = Array.from({ length: lineCount }, (_, i) => `<span>${i + 1}</span>`).join('');
+
+          container.innerHTML = `
+          <div class="code-pre-container">
+            <div class="line-numbers-gutter" id="streamingGutter">${gutterHTML}</div>
+            <pre class="code-pre"><code class="language-${languages[fileIndex]}" id="codeBlock"></code></pre>
+          </div>`;
+
+          const codeBlock = $('codeBlock');
+          if (codeBlock) {
+            codeBlock.textContent = content;
+            if (window.Prism) {
+              Prism.highlightElement(codeBlock);
+            }
+          }
+        }
+      }
+
+      function copyActiveCode() {
+        if (!generatedFiles || activeTab === 0) return;
+        const fileNames = ['index.html', 'styles.css', 'script.js'];
+        const targetName = fileNames[activeTab - 1];
+        const content = generatedFiles[targetName];
+        if (!content) return;
+
+        navigator.clipboard.writeText(content).then(() => {
+          const btn = $('copyCodeBtn');
+          const originalHTML = btn.innerHTML;
+          btn.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg> Copied!`;
+          setTimeout(() => {
+            btn.innerHTML = originalHTML;
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy text: ', err);
+        });
+      }
+
+      function downloadZip() {
+        if (!generatedFiles || !window.JSZip) {
+          alert('Dependencies not loaded. Please try again.');
+          return;
+        }
+
+        const zip = new JSZip();
+        Object.entries(generatedFiles).forEach(([filename, content]) => {
+          zip.file(filename, content);
+        });
+
+        const title = lastPipelineData?.plan?.project_title || 'web-project';
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'web-project';
+
+        zip.generateAsync({ type: 'blob' }).then(content => {
+          const url = URL.createObjectURL(content);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${slug}-code.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }).catch(err => {
+          console.error('Failed to generate ZIP: ', err);
+          alert('Error generating ZIP file.');
+        });
+      }
+
+      function applySuggestion(index) {
+        // Apply suggestion from filter result, then analyze again
+        const el = document.querySelector('#resultArea');
+        const btns = el.querySelectorAll('.ex-pill');
+        if (!btns || !btns[index]) return;
+        const txt = btns[index].textContent || btns[index].innerText;
+        $('promptInput').value = txt;
+        $('charCount').textContent = txt.length + ' chars';
+        analyzePrompt();
+      }
+    // ── Template loading on mount ─────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const templateId = urlParams.get('template');
+      if (templateId) {
+        const MOCK_TEMPLATES = [
+          { id: 'inspo', prompt: 'Build a spatial canvas for collecting, arranging, and sharing visuals. Use an aesthetic design with masonry layout for images.' },
+          { id: 'slides', prompt: 'Build a code-powered presentation builder with smooth transitions, interactive slides, and code snippet support. Apply a colorful gradient theme.' },
+          { id: 'maison', prompt: 'Create an editorial e-commerce storefront for home goods named Maison. Use elegant typography, large imagery, and minimal UI elements.' },
+          { id: 'asset', prompt: 'Build an internal dashboard for tracking company equipment and assigning assets to employees. Include data tables, status badges, and chart summaries.' },
+          { id: 'jordan', prompt: 'Create a dark-first premium aesthetic portfolio for Jordan Studio.' },
+          { id: 'continuum', prompt: 'Build a calm, distraction-free habit tracker with streak counters and analytics.' },
+          { id: 'upvote', prompt: 'Build a feature request and roadmap voting board named Upvote. Let team members submit ideas, upvote what matters most, and see the top-voted items rise to the top so everyone knows what is being built next.' },
+          { id: 'eventspark', prompt: 'Build an event discovery and ticketing platform named EventSpark. Include an event grid with photos, categories, an events calendar, ticket purchase flow, and organizer profiles.' },
+          { id: 'wildhaven', prompt: 'Build an editorial booking site named Wild Haven for off-grid glamping retreats. Include a browsable listing grid of retreats with nature photography, an availability calendar, and a booking flow.' },
+          { id: 'dealflow', prompt: 'Build a visual sales pipeline CRM named Dealflow with drag-and-drop deal stages, activity tracking, and a dashboard of pipeline value and win rate.' },
+          { id: 'loom', prompt: 'Build a refined artisan fashion storefront named Loom selling handcrafted knitwear, with a seasonal collection hero and a shoppable product grid.' },
+          { id: 'quotekit', prompt: 'Build a sales proposal tool named QuoteKit that lets teams create branded, AI-assisted proposals from reusable content blocks and track proposal win rate.' },
+          { id: 'evergreen', prompt: 'Build an editorial wedding website named Evergreen with an RSVP form, event details, registry links, and a photo gallery.' },
+          { id: 'retrofly', prompt: 'Build a team retrospective tool named Retrofly that collects feedback in three simple steps, surfaces AI-detected patterns, and tracks action items — no scheduling required.' },
+          { id: 'ember', prompt: 'Build a bold statement portfolio site named Ember for a creative studio, with large typography and a striking two-tone hero.' },
+          { id: 'stackwise', prompt: 'Build an inventory management app named Stackwise for modern teams, with AI-powered demand forecasting, SKU tracking, and stock accuracy metrics on a dashboard.' },
+          { id: 'wanderlust', prompt: 'Build a magazine-style travel content platform named Wanderlust featuring long-form travel stories, a destination search, and rich photo-led article layouts.' },
+          { id: 'triage', prompt: 'Build a bug submission tool named Triage with a standardized intake form, severity tracking (P1/P2/P3), and a prioritized issue list.' },
+          { id: 'obsidian', prompt: 'Build a cinematic dark photography portfolio named Obsidian for a professional photographer, with a full-bleed gallery and moody, minimal typography.' },
+          { id: 'rentely', prompt: 'Build a vacation rental marketplace named Rentely with search by destination/dates/guests, a listings grid, and individual stay detail pages.' },
+          { id: 'noire', prompt: 'Build a monochromatic artist portfolio site named Noire with a black-and-white image grid gallery and minimal navigation.' },
+          { id: 'dawnwedding', prompt: 'Build a magazine-style wedding website named Editorial Dawn Wedding with an elegant hero, event timeline, and RSVP form.' },
+          { id: 'parallax', prompt: 'Build a premium agency-style portfolio site named Parallax, with a bold "Shaping what\'s next" hero, services grid, and case study previews.' },
+          { id: 'echoportfolio', prompt: 'Build a colorful editorial portfolio site named Editorial Echo for a visual storyteller, with a masonry image grid and project categories.' },
+          { id: 'ecommstore', prompt: 'Build a premium ecommerce storefront named Linea with large editorial product photography, a shop grid, and product detail pages.' },
+          { id: 'landingpage', prompt: 'Build a visual landing page for an AI film production company, with a dreamy hero, feature highlights, and a get-started call to action.' },
+          { id: 'proresume', prompt: 'Build a professional resume website for Sarah Martinez, a Senior Product Manager, showcasing work history, skills, and selected work.' },
+          { id: 'resume', prompt: 'Build an ATS-compatible resume website for Elena Rossi, a Creative Director, with a clean single-page layout that passes automated resume screening.' }
+        ];
+        const template = MOCK_TEMPLATES.find(t => t.id === templateId);
+        if (template) {
+          $('promptInput').value = template.prompt;
+          $('charCount').textContent = template.prompt.length + ' chars';
+          setTimeout(analyzePrompt, 500); 
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
+    });
+    }
+  
+    // ── Template Browser Logic ───────────────────────────────
+    async function loadTemplates() {
+      try {
+        const res = await fetch('/api/templates');
+        const data = await res.json();
+        if (data.success && data.templates) {
+          const carousel = $('templateCarousel');
+          const grid = $('allTemplatesGrid');
+          carousel.innerHTML = '';
+          if (grid) grid.innerHTML = '';
+          
+          data.templates.forEach(t => {
+            // Using placeholder images or generic gradients for templates if real images are missing
+            const fallbackImg = `https://picsum.photos/seed/${t.id}/400/300`;
+            
+            const cardHTML = `
+              <img src="${fallbackImg}" alt="${t.title}" loading="lazy" />
+              <div class="template-info">
+                <div class="template-title">${t.title}</div>
+              </div>
+            `;
+            
+            const card = document.createElement('div');
+            card.className = 'template-card';
+            card.onclick = () => fillPromptAndBuild(t.prompt);
+            card.innerHTML = cardHTML;
+            carousel.appendChild(card);
+            
+            if (grid) {
+              const gridCard = document.createElement('div');
+              gridCard.className = 'template-card';
+              gridCard.onclick = () => {
+                document.getElementById('allTemplatesModal').style.display='none';
+                fillPromptAndBuild(t.prompt);
+              };
+              gridCard.innerHTML = cardHTML;
+              grid.appendChild(gridCard);
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load templates:', err);
+        $('templateCarousel').innerHTML = '<div style="color: #f56565;">Failed to load templates.</div>';
+      }
+    }
+
+    function fillPromptAndBuild(promptText) {
+      $('promptInput').value = promptText;
+      updateSubmitBtn();
+      analyzePrompt(true);
+    }
+
+    function updateSubmitBtn() {
+      const btn = analyzeBtn;
+      if ($('promptInput').value.trim().length > 0) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+
+    // Call on load
+    loadTemplates();
+</script>
+</body>
+
+</html>

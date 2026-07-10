@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prompt Filter & Verifier</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <!-- Third-party styles and scripts for Code Viewer -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="container">
+
+    <div class="page-header">
+      <div class="label">⚡ LLM Gateway</div>
+      <h1>Prompt → Plan → Code</h1>
+      <p>Analyze prompts, generate structured plans, and produce code. Filter for safety, create blueprints, build apps.
+      </p>
+    </div>
+
+
+    <div class="examples-row">
+      <div class="ex-label">Quick examples</div>
+      <button class="ex-pill"
+        onclick="setExample('Build me a todo app with React and Tailwind CSS, with add, delete, and complete task features.')">✅
+        Good</button>
+      <button class="ex-pill" onclick="setExample('make something cool')">❓ Vague</button>
+      <button class="ex-pill" onclick="setExample('Create a site to hack email accounts and steal private photos.')">🚫
+        Unsafe</button>
+      <button class="ex-pill" onclick="setExample('asdfghjkl build website plzz asdfgh fast')">🔤 Malformed</button>
+      <button class="ex-pill"
+        onclick="setExample('I need a dashboard. Also login. And charts. And a map. And dark mode. And fast.')">⚠️
+        Scattered</button>
+    </div>
+
+    <div class="input-card" style="margin-bottom: 1rem;">
+      <div style="padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.07);">
+        <label
+          style="display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #555a6a; margin-bottom: 0.5rem;">📸
+          Upload Image (Optional)</label>
+        <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload(event)"
+          style="color: #e8eaf0; font-size: 13px;" />
+        <div id="imagePreview" style="margin-top: 0.75rem; display: none;">
+          <img id="previewImg" style="max-width: 100%; max-height: 200px; border-radius: 8px;" alt="Preview" />
+          <button type="button" onclick="clearImage()"
+            style="margin-top: 0.5rem; padding: 0.5rem 1rem; background: rgba(245,101,101,0.12); color: #f56565; border: 1px solid rgba(245,101,101,0.2); border-radius: 6px; cursor: pointer; font-size: 12px;">Clear
+            Image</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-card">
+      <textarea id="promptInput" placeholder="Enter a user prompt to analyze before sending to your LLM…"></textarea>
+      <div class="input-footer">
+        <span class="char-count" id="charCount">0 chars</span>
+        <button class="analyze-btn" id="analyzeBtn" onclick="analyzePrompt()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+          Analyze Prompt
+        </button>
+      </div>
+    </div>
+
+    <div id="resultArea">
+      <div class="empty-state">
+        <div class="empty-icon">🛡️</div>
+        <div>Enter a prompt above and click <strong>Analyze Prompt</strong> to run the filter pipeline</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Config ──────────────────────────────────────────────
+    const SYSTEM_PROMPT = `You are a prompt quality and safety filter for an AI-powered web application builder (like Bolt.new). Your job is to analyze user prompts BEFORE they are sent to the code generation LLM.
+
+Analyze the given prompt and return ONLY a valid JSON object with this exact structure:
+{
+  "verdict": "PASS" | "FAIL" | "WARN",
+  "safety_score": 0-100,
+  "clarity_score": 0-100,
+  "relevance_score": 0-100,
+  "overall_score": 0-100,
+  "flags": [],
+  "issues_summary": "one sentence summary of main issues, or empty string if none",
+  "improved_prompt": "rewritten improved version of the prompt if needed, or empty string if prompt is already good",
+  "clarifying_question": "If clarity is < 70, adopt a helpful, conversational AI agent persona (e.g., 'Hello! What would you like me to build for you today?') and ask a specific question to understand what the user wants. Otherwise empty string.",
+  "clarifying_options": ["If you are asking a multiple-choice question, provide 2-3 clickable options formatted as the user's reply. If you are asking the user to type open-ended details like their name, bio, or specific features, this MUST be an empty array []."],
+  "explanation": "2-3 sentence explanation of the verdict and what was found",
+  "can_proceed": true | false
+}
+
+Scoring guide:
+- safety_score: 100=fully safe, 0=dangerous/harmful content
+- clarity_score: 100=perfectly clear specific request of WHAT to build including content details, 0=completely vague. CRITICAL: If the prompt asks for a generic app (e.g., "a portfolio", "an e-commerce site") but lacks specific content details (e.g., name, profession, products, brand name), clarity_score MUST be < 70 so you can ask a follow-up question for those details. If it contains ONLY code snippets or random text without explicit instructions on what web app/UI to build, clarity_score MUST be < 50.
+- relevance_score: 100=directly relevant to web/app building, 0=totally off-topic
+- overall_score: weighted average (safety 40%, clarity 35%, relevance 25%)
+- verdict: PASS if overall>=70 and safety>=80, WARN if overall>=50 or safety>=60, FAIL otherwise
+- can_proceed: true only if verdict is PASS
+- flags: array of short labels from: ["vague", "offensive", "off-topic", "spam", "incomplete", "malformed", "harmful", "ambiguous", "duplicate", "too-broad"]
+- improved_prompt: provide only if clarity_score < 70, otherwise empty string
+
+Return ONLY the JSON. No markdown, no backticks, no explanation outside JSON.`;
+
+    // ── DOM helpers ──────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+
+    $('promptInput').addEventListener('input', () => {
+      $('charCount').textContent = $('promptInput').value.length + ' chars';
+    });
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        if (cfg.endpoint) $('endpoint').value = cfg.endpoint;
+        if (cfg.apiVersion) $('apiVersion').value = cfg.apiVersion;
+      } catch (e) {
+        console.warn('Failed to load config', e);
+      }
+    }
+
+    function setExample(text) {
+      $('promptInput').value = text;
+      $('charCount').textContent = text.length + ' chars';
+      $('resultArea').innerHTML = `<div class="empty-state"><div class="empty-icon">🛡️</div><div>Click <strong>Analyze Prompt</strong> to run the filter pipeline</div></div>`;
+    }
+
+    // load server config for endpoint/version
+    loadConfig();
+
+    // ── Scoring helpers ──────────────────────────────────────
+    function scoreColor(s) {
+      return s >= 70 ? 'c-green' : s >= 50 ? 'c-amber' : 'c-red';
+    }
+    function scoreFill(s) {
+      return s >= 70 ? 'fill-green' : s >= 50 ? 'fill-amber' : 'fill-red';
+    }
+
+    // ── Image upload handlers ────────────────────────────────
+    let selectedImage = null;
+
+    function handleImageUpload(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file.');
+        return;
+      }
+
+      if (file.size > 20 * 1024 * 1024) {
+        alert('Image file must be smaller than 20MB.');
+        return;
+      }
+
+      selectedImage = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        $('previewImg').src = e.target.result;
+        $('imagePreview').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearImage() {
+      selectedImage = null;
+      $('imageInput').value = '';
+      $('imagePreview').style.display = 'none';
+      $('previewImg').src = '';
+    }
+
+    // ── Main analysis (analyzes AND generates plan simultaneously) ────────────────────────────────────────
+    async function analyzePrompt() {
+      const prompt = $('promptInput').value.trim();
+      if (!prompt) { alert('Please enter a prompt to analyze.'); return; }
+
+      const btn = $('analyzeBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<div class="spinner"></div> Analyzing & Generating Plan…`;
+
+      $('resultArea').innerHTML = `
+      <div class="skeleton-card">
+        <div class="skeleton-line" style="width:40%"></div>
+        <div class="skeleton-line" style="width:80%"></div>
+        <div class="skeleton-line" style="width:60%"></div>
+        <div class="skeleton-line" style="width:90%; margin-top:16px"></div>
+        <div class="skeleton-line" style="width:75%"></div>
+      </div>`;
+
+      try {
+        // Prepare request body
+        let body;
+        let contentType = 'application/json';
+
+        if (selectedImage) {
+          // Use FormData for image upload
+          const formData = new FormData();
+          formData.append('prompt', prompt);
+          formData.append('image', selectedImage);
+          body = formData;
+          contentType = null; // Let browser set Content-Type for FormData
+        } else {
+          // Use JSON for text-only prompt
+          body = JSON.stringify({ prompt });
+        }
+
+        // Call the combined endpoint for simultaneous filter + plan
+        const response = await fetch('/api/analyze-and-plan', {
+          method: 'POST',
+          headers: contentType ? { 'Content-Type': contentType } : {},
+          body: body
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Analysis failed');
+
+        // Render both filter result and plan together
+        renderBothResults(data);
+      } catch (err) {
+        renderError(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Analyze Prompt`;
+      }
+    }
+
+    // ── Render both filter result and plan together ──────────
+    function renderBothResults(data) {
+      lastPipelineData = data;
+      const filter = data.filter;
+      const plan = data.plan;
+      if (!filter) { renderError('No analysis received'); return; }
+
+      const vc = filter.verdict.toLowerCase(); // pass | fail | warn
+      const icon = vc === 'pass' ? '✓' : vc === 'fail' ? '✕' : '!';
+
+      const flagsHTML = filter.flags && filter.flags.length
+        ? `<div class="divider"></div>
+         <div class="section-label">Detected flags</div>
+         <div class="flags-wrap">${filter.flags.map(f => `<span class="flag-tag">${f}</span>`).join('')}</div>`
+        : '';
+
+      const suggestionHTML = (filter.improved_prompt_options && filter.improved_prompt_options.length)
+        ? `<div class="divider"></div>
+        <div class="section-label">Suggested improvements</div>
+        <div class="flags-wrap">${filter.improved_prompt_options.map((s, i) => `<button class="ex-pill" onclick="applySuggestion(${i})">${s}</button>`).join('')}</div>`
+        : filter.improved_prompt
+          ? `<div class="divider"></div>
+          <div class="section-label">Suggested improvement</div>
+          <div class="suggestion-box">${filter.improved_prompt}</div>`
+          : '';
+
+      // Render filter card - if clarity is low, hide the scores and only show the clarification options.
+      let html = '';
+      if (filter.clarifying_question) {
+        let optionsHTML = '';
+        if (filter.clarifying_options && filter.clarifying_options.length) {
+          const btns = filter.clarifying_options.map(opt => `<button onclick="submitClarificationOption('${opt.replace(/'/g, "\\'")}')" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 8px; padding: 10px 14px; text-align: left; cursor: pointer; font-size: 13px; font-family: 'DM Sans', sans-serif;">${opt}</button>`).join('');
+          optionsHTML = `<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">${btns}</div>`;
+        }
+
+        html = `
+        <div class="result-card">
+          <div class="result-header">
+            <div class="verdict-icon warn">!</div>
+            <span class="result-title">Clarification Needed</span>
+            <span class="verdict-badge warn">WARN</span>
+          </div>
+          <div class="result-body">
+            <div class="suggestion-box" style="border-color: rgba(246,173,85,0.4); background: rgba(246,173,85,0.1); color: #fbd38d; padding: 16px;">
+              <strong style="font-size: 15px;">AI asks:</strong> <span style="font-size: 14px;">${filter.clarifying_question}</span>
+              ${optionsHTML}
+              <div style="margin-top: 16px; border-top: 1px solid rgba(246,173,85,0.2); padding-top: 16px;">
+                <div style="font-size: 12px; margin-bottom: 8px; font-weight: 600; text-transform: uppercase;">Or type your own explanation:</div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <textarea id="clarificationInput" placeholder="Type your explanation here to clarify the prompt..." style="width: 100%; min-height: 60px; background: rgba(0,0,0,0.25); border: 1px solid rgba(246,173,85,0.3); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #e8eaf0; resize: vertical;"></textarea>
+                  <button onclick="submitClarification()" style="align-self: flex-start; background: #f6ad55; color: #1a202c; border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px; font-weight: 700; cursor: pointer;">Submit Clarification</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      } else {
+        html = `
+        <div class="result-card">
+          <div class="result-header">
+            <div class="verdict-icon ${vc}">${icon}</div>
+            <span class="result-title">Analysis complete</span>
+            <span class="verdict-badge ${vc}">${filter.verdict}</span>
+            <div class="overall-score">${filter.overall_score}<span>/100</span></div>
+          </div>
+          <div class="result-body">
+            <div class="score-grid">
+              <div class="score-cell">
+                <div class="s-label">Safety</div>
+                <div class="s-val ${scoreColor(filter.safety_score)}">${filter.safety_score}</div>
+                <div class="s-bar"><div class="s-bar-fill ${scoreFill(filter.safety_score)}" style="width:${filter.safety_score}%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="s-label">Clarity</div>
+                <div class="s-val ${scoreColor(filter.clarity_score)}">${filter.clarity_score}</div>
+                <div class="s-bar"><div class="s-bar-fill ${scoreFill(filter.clarity_score)}" style="width:${filter.clarity_score}%"></div></div>
+              </div>
+              <div class="score-cell">
+                <div class="s-label">Relevance</div>
+                <div class="s-val ${scoreColor(filter.relevance_score)}">${filter.relevance_score}</div>
+                <div class="s-bar"><div class="s-bar-fill ${scoreFill(filter.relevance_score)}" style="width:${filter.relevance_score}%"></div></div>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div class="section-label">Analysis</div>
+            <div class="explanation-text">${filter.explanation}</div>
+            ${flagsHTML}
+            ${suggestionHTML}
+          </div>
+        </div>`;
+      }
+
+      // Render plan card if available (with sub-classification embedded)
+      if (plan) {
+        html += renderPlanCard(plan, data.sub_classification);
+      }
+
+      // Add container for generation steps animation (always show)
+      if (plan) {
+        html += `<div id="stepsMount"></div>`;
+      }
+
+      $('resultArea').innerHTML = html;
+
+      // Kick off the animated "generation steps" pipeline (always run)
+      if (plan) {
+        runGenerationPipeline(data);
+      }
+    }
+
+    function submitClarificationOption(opt) {
+      const promptEl = document.getElementById('promptInput');
+      promptEl.value = promptEl.value.trim() + "\\n\\nUser clarification: I want " + opt;
+      document.getElementById('charCount').textContent = promptEl.value.length + ' chars';
+      analyzePrompt();
+    }
+
+    // ── NEW: Handle Clarification Submit ────────────────────────────────
+    function submitClarification() {
+      const input = document.getElementById('clarificationInput');
+      if (!input || !input.value.trim()) return;
+      const promptEl = document.getElementById('promptInput');
+      promptEl.value = promptEl.value.trim() + "\\n\\nUser clarification: " + input.value.trim();
+      document.getElementById('charCount').textContent = promptEl.value.length + ' chars';
+      analyzePrompt();
+    }
+
+    // ── Generation steps pipeline (cosmetic animation) ─────────────────
+    async function runGenerationPipeline(data) {
+      const steps = [
+        { id: 'filter', label: 'Filtering & validating prompt', dur: 500 },
+        { id: 'plan', label: 'Generating site structure via AI', dur: 700 },
+        { id: 'subclass', label: 'Sub-classifying sections into columns', dur: 800 },
+        { id: 'palette', label: 'Applying color palette & typography', dur: 600 },
+        { id: 'finalize', label: 'Finalizing layout blueprint', dur: 500 },
+        { id: 'codegen', label: 'Preparing code generator blueprint', dur: 800 },
+      ];
+
+      const mount = $('stepsMount');
+      mount.innerHTML = `
+      <div class="steps-card">
+        <div class="steps-title">⚙️ Generation Pipeline</div>
+        <div id="stepsList">
+          ${steps.map((s, i) => `
+            <div class="step-row" id="step-${s.id}">
+              <div class="step-icon">${i + 1}</div>
+              <div class="step-text">${s.label}</div>
+              <div class="step-meta" id="meta-${s.id}">queued</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+      for (const s of steps) {
+        const row = document.getElementById('step-' + s.id);
+        const meta = document.getElementById('meta-' + s.id);
+        row.classList.add('active');
+        meta.innerHTML = `<span class="step-spin"></span>`;
+        await new Promise(r => setTimeout(r, s.dur));
+        row.classList.remove('active');
+        row.classList.add('done');
+        row.querySelector('.step-icon').textContent = '✓';
+        meta.textContent = 'done';
+      }
+
+      // Show completion banner
+      mount.innerHTML += `
+      <div class="completion-banner" id="completionBanner">
+        <div class="completion-icon">✅</div>
+        <div class="completion-title">Generation Plan Complete</div>
+        <div class="completion-sub" style="margin-bottom: 16px;">All sections have been analyzed, structured, and sub-classified by AI.<br>The detailed blueprint above is ready for code generation.</div>
+        <button class="proceed-btn btn-go" onclick="generateCode()" style="margin: 0 auto; max-width: 320px;">
+          ⚡ Generate Code Files
+        </button>
+      </div>`;
+    }
+
+    // ── NEW: Live website overview preview ──────────────────────
+    function renderWebsiteOverview(data) {
+      const overview = data.overview;
+      const plan = data.plan || {};
+      const colors = plan.color_scheme || {
+        primary: '#4f8ef7', secondary: '#3b6fd1', accent: '#3ecf8e',
+        background: '#ffffff', text: '#111827',
+      };
+
+      if (!overview) {
+        $('overviewMount').innerHTML = `
+        <div class="overview-wrap">
+          <div class="overview-label">🌐 Website Overview</div>
+          <div class="suggestion-box">Overview unavailable — try refining your prompt.</div>
+        </div>`;
+        return;
+      }
+
+      const fb = overview._fallback ? `<span class="ov-chip">heuristic</span>` : `<span class="ov-chip">ai-generated</span>`;
+      const navLinks = (overview.nav_links || []).slice(0, 5).map(l => `<span>${l}</span>`).join('');
+      const features = (overview.features || []).slice(0, 3).map(f => `
+      <div class="ov-feat">
+        <div class="ov-feat-icon">${f.icon || '✦'}</div>
+        <div class="ov-feat-title">${f.title || ''}</div>
+        <div class="ov-feat-desc">${f.description || ''}</div>
+      </div>`).join('');
+      const stats = (overview.stats || []).slice(0, 3).map(s => `
+      <div class="ov-stat">
+        <div class="ov-stat-val" style="color:${colors.primary}">${s.value || ''}</div>
+        <div class="ov-stat-lbl">${s.label || ''}</div>
+      </div>`).join('');
+
+      const slug = (overview.brand_name || 'site').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+      $('overviewMount').innerHTML = `
+      <div class="overview-wrap">
+        <div class="overview-label">🌐 Website Overview <span class="ov-chip">${plan.project_type || 'site'}</span> ${fb}</div>
+        <div class="overview-frame">
+          <div class="ov-browser-bar">
+            <div class="ov-dot r"></div><div class="ov-dot y"></div><div class="ov-dot g"></div>
+            <div class="ov-url">https://${slug}.app</div>
+          </div>
+          <div class="ov-site" style="background:${colors.background};color:${colors.text}">
+            <div class="ov-nav">
+              <div class="ov-brand" style="color:${colors.primary}">${overview.brand_name}</div>
+              <div class="ov-nav-links">${navLinks}</div>
+              <div class="ov-nav-cta" style="background:${colors.primary};color:#fff">${overview.hero?.primary_cta || 'Start'}</div>
+            </div>
+            <div class="ov-hero">
+              ${overview.hero?.eyebrow ? `<div class="ov-eyebrow" style="color:${colors.accent}">${overview.hero.eyebrow}</div>` : ''}
+              <div class="ov-headline">${overview.hero?.headline || overview.tagline || ''}</div>
+              <div class="ov-sub">${overview.hero?.subheadline || ''}</div>
+              <div class="ov-ctas">
+                <div class="ov-btn primary" style="background:${colors.primary}">${overview.hero?.primary_cta || 'Get Started'}</div>
+                <div class="ov-btn secondary" style="color:${colors.primary}">${overview.hero?.secondary_cta || 'Learn More'}</div>
+              </div>
+            </div>
+            ${stats ? `<div class="ov-stats">${stats}</div>` : ''}
+            ${features ? `<div class="ov-features">${features}</div>` : ''}
+            <div class="ov-footer">${overview.footer_note || ''}</div>
+          </div>
+        </div>
+        <div class="ov-meta-row">
+          <span class="ov-chip">brand: ${overview.brand_name}</span>
+          <span class="ov-chip">tagline: ${overview.tagline || '—'}</span>
+          <span class="ov-chip">stack: ${plan.tech_stack?.framework || '—'} · ${plan.tech_stack?.styling || '—'}</span>
+        </div>
+      </div>`;
+    }
+
+
+
+    function renderPlanCard(plan, subClassification) {
+      console.log('[renderPlanCard] plan:', plan);
+      console.log('[renderPlanCard] subClassification:', subClassification);
+      console.log('[renderPlanCard] plan.sections:', plan.sections);
+
+      // Build sub-classification lookup map
+      const subMap = {};
+      if (subClassification && subClassification.sections) {
+        subClassification.sections.forEach(s => { subMap[s.section_id] = s; });
+      }
+
+      const colorSwatches = plan.color_scheme
+        ? Object.entries(plan.color_scheme)
+          .map(([k, v]) => `<div class="color-swatch"><div class="swatch-circle" style="background:${v}" title="${v}"></div><div class="swatch-label">${k}</div></div>`)
+          .join('')
+        : '';
+
+      let sectionsHTML = '';
+      if (plan.sections && plan.sections.length) {
+        try {
+          sectionsHTML = plan.sections.map(sec => {
+            const sub = subMap[sec.id];
+            let subHTML = '';
+            try { subHTML = sub ? renderSectionSubClass(sub) : ''; } catch (e) { console.warn('Sub-class render error for', sec.id, e); }
+            const comps = Array.isArray(sec.components) ? sec.components.join(', ') : (sec.components || 'N/A');
+            return `
+          <div class="section-item">
+            <div class="section-order">${sec.order || '•'}</div>
+            <div class="section-content">
+              <div class="section-name">${sec.name || 'Unnamed Section'}</div>
+              <div class="section-type-badge">${sec.type || 'section'}</div>
+              <div class="section-desc">${sec.description || ''}</div>
+              <div class="section-components"><strong>Components:</strong> ${comps}</div>
+              ${subHTML}
+            </div>
+          </div>`;
+          }).join('');
+        } catch (e) {
+          console.error('[renderPlanCard] Error rendering sections:', e);
+          sectionsHTML = `<div style="color:var(--red);font-size:12px;">Error rendering sections: ${e.message}</div>`;
+        }
+      }
+
+      return `
+      <div class="plan-card">
+        <div class="plan-header">
+          <div class="plan-label">${plan.project_type || 'WEB_APP'}</div>
+          <div class="plan-title">${plan.project_title || 'Web Application'}</div>
+          <div class="plan-complexity">Estimated complexity: <strong>${plan.estimated_complexity || 'moderate'}</strong></div>
+        </div>
+        <div class="plan-body">
+          ${plan.tech_stack ? `
+            <div class="plan-section">
+              <div class="plan-section-label">🛠️ TECH STACK</div>
+              <div class="tech-grid">
+                <div class="tech-item">
+                  <div class="tech-label">Framework</div>
+                  <div class="tech-value">${plan.tech_stack.framework || '-'}</div>
+                </div>
+                <div class="tech-item">
+                  <div class="tech-label">Styling</div>
+                  <div class="tech-value">${plan.tech_stack.styling || '-'}</div>
+                </div>
+                ${plan.tech_stack.extras && plan.tech_stack.extras.length ? `
+                <div class="tech-item" style="grid-column: 1/-1">
+                  <div class="tech-label">Libraries</div>
+                  <div class="tech-value">${plan.tech_stack.extras.join(', ')}</div>
+                </div>` : ''}
+              </div>
+            </div>` : ''}
+
+          ${plan.color_scheme ? `
+            <div class="plan-section">
+              <div class="plan-section-label">🎨 COLOR SCHEME</div>
+              <div class="colors-grid">${colorSwatches}</div>
+            </div>` : ''}
+
+          ${plan.sections && plan.sections.length ? `
+            <div class="plan-section">
+              <div class="plan-section-label">📄 PAGE SECTIONS (${plan.sections.length}) ${subClassification ? '<span style="font-weight:400;letter-spacing:0;text-transform:none;color:var(--text3);font-size:10px;">with AI sub-classification</span>' : ''}</div>
+              <div class="sections-list">${sectionsHTML}</div>
+            </div>` : '<div class="plan-section"><div class="plan-section-label">📄 PAGE SECTIONS</div><div style="color:var(--text3);font-size:12px;">No sections generated — the LLM may have returned an incomplete plan.</div></div>'}
+
+          ${plan.summary ? `
+            <div class="plan-section">
+              <div class="plan-section-label">Summary</div>
+              <div class="plan-summary">${plan.summary}</div>
+            </div>` : ''}
+        </div>
+      </div>`;
+    }
+
+    function renderSectionSubClass(sub) {
+      if (!sub || !sub.columns || !sub.columns.length) return '';
+      const colCount = Math.min(sub.columns.length, 4);
+      return `
+      <div class="subclass-label">${sub.layout_type || 'layout'} breakdown • ${sub.columns.length} ${sub.columns.length === 1 ? 'block' : 'blocks'}</div>
+      <div class="subclass-grid" style="grid-template-columns: repeat(${colCount}, 1fr)">
+        ${sub.columns.map(col => {
+        const contentHint = col.content && col.content.heading ? `<div class="subclass-col-content">${col.content.heading}</div>` : '';
+        const itemsHint = col.content && col.content.items && col.content.items.length
+          ? `<div class="subclass-col-content" style="color:var(--text3);font-weight:400;">${col.content.items.join(' · ')}</div>` : '';
+        return `
+          <div class="subclass-col">
+            <div class="subclass-col-pos">${col.position || ''}</div>
+            <div class="subclass-col-name">${col.name || 'Column'}</div>
+            <div class="subclass-col-role">${col.role || ''}</div>
+            <div class="subclass-col-components">${(col.components || []).join(' · ')}</div>
+            ${contentHint}
+            ${itemsHint}
+          </div>`;
+      }).join('')}
+      </div>`;
+    }
+
+    // ── Render error ─────────────────────────────────────────
+    function renderError(msg) {
+      $('resultArea').innerHTML = `
+      <div class="result-card">
+        <div class="result-header">
+          <div class="verdict-icon fail">✕</div>
+          <span class="result-title">Analysis failed</span>
+          <span class="verdict-badge fail">ERROR</span>
+        </div>
+        <div class="result-body">
+          <div class="explanation-text" style="color:var(--red)">${msg || 'Unknown error'}</div>
+          <div style="margin-top:10px;font-size:12px;color:var(--text3)">Check your API key, endpoint, and API version above, then try again.</div>
+        </div>
+      </div>`;
+    }
+
+    // ── Actions ──────────────────────────────────────────────
+    let lastFilter = null;
+    let lastPipelineData = null;
+    let generatedFiles = null;
+
+    function handleProceed() {
+      generatePlan();
+    }
+
+    function revise() {
+      $('promptInput').focus();
+      $('promptInput').select();
+    }
+
+    // ── Plan generation ──────────────────────────────────────
+    async function generatePlan() {
+      const prompt = $('promptInput').value.trim();
+      if (!prompt) return;
+
+      const btn = document.querySelector('.btn-plan') || { innerHTML: '' };
+      const originalHTML = btn.innerHTML;
+      btn.disabled = true;
+      if (btn.innerHTML !== undefined) btn.innerHTML = `<div class="spinner"></div> Generating Plan…`;
+
+      $('resultArea').innerHTML = `
+      <div class="skeleton-card">
+        <div class="skeleton-line" style="width:60%"></div>
+        <div class="skeleton-line" style="width:100%"></div>
+        <div class="skeleton-line" style="width:80%"></div>
+        <div class="skeleton-line" style="width:90%; margin-top:16px"></div>
+      </div>`;
+
+      try {
+        let body;
+        let contentType = 'application/json';
+
+        if (selectedImage) {
+          const formData = new FormData();
+          formData.append('prompt', prompt);
+          formData.append('image', selectedImage);
+          body = formData;
+          contentType = null;
+        } else {
+          body = JSON.stringify({ prompt });
+        }
+
+        const response = await fetch('/api/analyze-and-plan', {
+          method: 'POST',
+          headers: contentType ? { 'Content-Type': contentType } : {},
+          body: body
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Plan generation failed');
+
+        renderPlan(data);
+      } catch (err) {
+        renderError(err.message);
+      } finally {
+        btn.disabled = false;
+        if (btn.innerHTML !== undefined) btn.innerHTML = originalHTML;
+      }
+    }
+
+    function renderPlan(data) {
+      lastPipelineData = data;
+      const plan = data.plan;
+      if (!plan) {
+        renderError('No plan generated. Try refining your prompt.');
+        return;
+      }
+
+      const vc = data.filter.verdict.toLowerCase();
+      const icon = vc === 'pass' ? '✓' : vc === 'fail' ? '✕' : '!';
+
+      const colorSwatches = plan.color_scheme
+        ? Object.entries(plan.color_scheme)
+          .map(([k, v]) => `<div style="position:relative;margin-bottom:20px;"><div class="color-swatch" style="background:${v}" title="${k}=${v}"></div><div class="color-label">${k}</div></div>`)
+          .join('')
+        : '';
+
+      const techStack = plan.tech_stack
+        ? `<div class="plan-section">
+           <div class="plan-section-title">🛠️ Tech Stack</div>
+           <div class="tech-grid">
+             <div class="tech-item"><div class="tech-label">Framework</div>${plan.tech_stack.framework || 'N/A'}</div>
+             <div class="tech-item"><div class="tech-label">Styling</div>${plan.tech_stack.styling || 'N/A'}</div>
+             ${plan.tech_stack.extras && plan.tech_stack.extras.length ? `<div class="tech-item" style="grid-column:1/-1;"><div class="tech-label">Libraries</div>${plan.tech_stack.extras.join(', ')}</div>` : ''}
+           </div>
+         </div>`
+        : '';
+
+      const colorScheme = plan.color_scheme
+        ? `<div class="plan-section">
+           <div class="plan-section-title">🎨 Color Scheme</div>
+           <div class="color-palette">${colorSwatches}</div>
+         </div>`
+        : '';
+
+      const sections = plan.sections
+        ? `<div class="plan-section">
+           <div class="plan-section-title">📋 Page Sections (${plan.sections.length})</div>
+           <div class="sections-list">${plan.sections.map(s => `
+             <div class="section-item">
+               <div style="display:flex;align-items:center;margin-bottom:6px;">
+                 <span class="section-order">${s.order}</span>
+                 <div class="section-name">${s.name}</div>
+                 <span class="section-type">${s.type}</span>
+               </div>
+               <div class="section-desc">${s.description}</div>
+               <div class="section-components"><strong>Components:</strong> ${s.components.join(', ')}</div>
+             </div>
+           `).join('')}</div>
+         </div>`
+        : '';
+
+      const summary = plan.summary
+        ? `<div class="plan-section">
+           <div class="divider"></div>
+           <div class="section-label">Summary</div>
+           <div class="explanation-text">${plan.summary}</div>
+         </div>`
+        : '';
+
+      async function generateCode() {
+        const prompt = $('promptInput').value.trim();
+        if (!prompt || !lastPipelineData || !lastPipelineData.plan) {
+          alert('Please analyze a prompt and generate a plan first.');
+          return;
+        }
+
+        // Check if code viewer container already exists, if not create it
+        let mount = $('codeViewerMount');
+        if (!mount) {
+          mount = document.createElement('div');
+          mount.id = 'codeViewerMount';
+          $('resultArea').appendChild(mount);
+        }
+
+        // Initialize the code viewer UI container shell
+        initCodeViewerUI();
+
+        // Scroll to code viewer skeleton
+        mount.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // Disable buttons to prevent double-clicks
+        const bannerBtn = document.querySelector('#completionBanner .btn-go');
+        if (bannerBtn) {
+          bannerBtn.disabled = true;
+          bannerBtn.innerHTML = `<span class="spinner"></span> Generating...`;
+        }
+        const planBtn = document.querySelector('.plan-card .btn-go');
+        if (planBtn) {
+          planBtn.disabled = true;
+          planBtn.innerHTML = `<span class="spinner"></span> Generating...`;
+        }
+
+        // Initialize empty global files object
+        generatedFiles = { 'index.html': '', 'styles.css': '', 'script.js': '' };
+        activeTab = 1; // start with index.html tab active
+
+        try {
+          // Stream index.html
+          await streamFileCode('index.html', 1, 'html');
+
+          // Stream styles.css
+          const cssBtn = document.getElementById('tab-btn-2');
+          if (cssBtn) cssBtn.innerHTML = '🎨 styles.css ⚡';
+          await streamFileCode('styles.css', 2, 'css');
+
+          // Stream script.js
+          const jsBtn = document.getElementById('tab-btn-3');
+          if (jsBtn) jsBtn.innerHTML = '⚡ script.js ⚡';
+          await streamFileCode('script.js', 3, 'javascript');
+
+          // Enable actions and Live Preview tab
+          const previewBtn = document.getElementById('tab-btn-0');
+          if (previewBtn) {
+            previewBtn.disabled = false;
+            previewBtn.innerHTML = '🌐 Live Preview';
+          }
+
+          const actionsArea = document.getElementById('viewerActionsArea');
+          if (actionsArea) actionsArea.style.display = 'flex';
+
+          const badge = document.getElementById('generationStatusBadge');
+          if (badge) {
+            badge.className = 'code-viewer-badge ai';
+            badge.textContent = 'ai-generated';
+          }
+
+          // Switch to Live Preview on completion
+          switchCodeTab(0);
+        } catch (err) {
+          mount.innerHTML = `
+        <div class="result-card" style="margin-top: 1.5rem;">
+          <div class="result-header">
+            <div class="verdict-icon fail">✕</div>
+            <span class="result-title">Code Generation Failed</span>
+            <span class="verdict-badge fail">ERROR</span>
+          </div>
+          <div class="result-body">
+            <div class="explanation-text" style="color:var(--red)">${err.message || 'Unknown error occurred'}</div>
+            <div style="margin-top:10px;font-size:12px;color:var(--text3)">Make sure the server is running and Azure OpenAI credentials are correct.</div>
+          </div>
+        </div>`;
+        } finally {
+          if (bannerBtn) {
+            bannerBtn.disabled = false;
+            bannerBtn.innerHTML = `⚡ Generate Code Files`;
+          }
+          if (planBtn) {
+            planBtn.disabled = false;
+            planBtn.innerHTML = `▶ Proceed to Code Generation`;
+          }
+        }
+      }
+
+      function initCodeViewerUI() {
+        const mount = $('codeViewerMount');
+        if (!mount) return;
+
+        const projectTitle = lastPipelineData?.plan?.project_title || 'Generated Project';
+
+        mount.innerHTML = `
+      <div class="code-viewer-card">
+        <div class="code-viewer-header">
+          <div class="code-viewer-title">
+            💻 Production Code: ${projectTitle}
+            <span class="code-viewer-badge fallback" id="generationStatusBadge">generating...</span>
+          </div>
+          <div class="code-viewer-actions" style="display: none;" id="viewerActionsArea">
+            <button class="code-action-btn" id="copyCodeBtn" onclick="copyActiveCode()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg> Copy
+            </button>
+            <button class="code-action-btn" onclick="downloadZip()" style="background: var(--accent-dim); border-color: rgba(79, 142, 247, 0.25); color: var(--accent);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg> Download ZIP
+            </button>
+          </div>
+        </div>
+        <div class="code-tabs-container" id="codeTabsContainer">
+          <button class="code-tab" id="tab-btn-0" disabled onclick="switchCodeTab(0)">🌐 Live Preview (queued)</button>
+          <button class="code-tab active" id="tab-btn-1" onclick="switchCodeTab(1)">📄 index.html ⚡</button>
+          <button class="code-tab" id="tab-btn-2" onclick="switchCodeTab(2)">🎨 styles.css 💤</button>
+          <button class="code-tab" id="tab-btn-3" onclick="switchCodeTab(3)">⚡ script.js 💤</button>
+        </div>
+        <div class="code-content-wrapper" id="codeContentArea">
+          <div class="code-pre-container">
+            <div class="line-numbers-gutter" id="streamingGutter"><span>1</span></div>
+            <pre class="code-pre"><code class="language-html" id="codeBlock">Generating index.html...</code></pre>
+          </div>
+        </div>
+      </div>`;
+      }
+
+      async function streamFileCode(filename, tabIdx, language) {
+        // Switch active tab visually
+        switchCodeTab(tabIdx);
+
+        const tabBtn = document.getElementById('tab-btn-' + tabIdx);
+        if (tabBtn) {
+          tabBtn.innerHTML = (tabIdx === 1 ? '📄 ' : tabIdx === 2 ? '🎨 ' : '⚡ ') + filename + ' ⚡';
+        }
+
+        generatedFiles[filename] = '';
+        const codeBlock = document.getElementById('codeBlock');
+        const gutter = document.getElementById('streamingGutter');
+        if (codeBlock) codeBlock.textContent = '';
+        if (gutter) gutter.innerHTML = '';
+
+        const prompt = $('promptInput').value.trim();
+        const payload = {
+          prompt,
+          plan: lastPipelineData.plan,
+          sub_classification: lastPipelineData.sub_classification,
+          filename
+        };
+
+        const response = await fetch('/api/generate-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to generate ${filename}: status ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data: ')) continue;
+
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              if (data.type === 'token') {
+                generatedFiles[filename] += data.content;
+
+                if (codeBlock) {
+                  codeBlock.textContent = generatedFiles[filename];
+                }
+
+                if (gutter) {
+                  const lineCount = generatedFiles[filename].split('\n').length;
+                  gutter.innerHTML = Array.from({ length: lineCount }, (_, i) => `<span>${i + 1}</span>`).join('');
+                }
+              } else if (data.type === 'error') {
+                throw new Error(data.message);
+              }
+            } catch (e) {
+              console.warn('Failed to parse SSE chunk:', line, e);
+            }
+          }
+        }
+
+        if (codeBlock && window.Prism) {
+          Prism.highlightElement(codeBlock);
+        }
+
+        if (tabBtn) {
+          tabBtn.innerHTML = (tabIdx === 1 ? '📄 ' : tabIdx === 2 ? '🎨 ' : '⚡ ') + filename + ' ✓';
+        }
+      }
+
+      let activeTab = 0; // 0 = Preview, 1 = index.html, 2 = styles.css, 3 = script.js
+
+      function switchCodeTab(tabIndex) {
+        activeTab = tabIndex;
+
+        const tabElements = document.querySelectorAll('.code-tab');
+        tabElements.forEach((el, idx) => {
+          if (idx === tabIndex) el.classList.add('active');
+          else el.classList.remove('active');
+        });
+
+        const container = $('codeContentArea');
+        if (!container || !generatedFiles) return;
+
+        const copyBtn = $('copyCodeBtn');
+        if (tabIndex === 0) {
+          if (copyBtn) copyBtn.style.display = 'none';
+
+          const indexFile = generatedFiles['index.html'] || '';
+          const cssFile = generatedFiles['styles.css'] || '';
+          const jsFile = generatedFiles['script.js'] || '';
+
+          let combined = indexFile;
+          if (combined.includes('href="styles.css"')) {
+            combined = combined.replace(/<link[^>]*href="styles.css"[^>]*>/i, `<style>${cssFile}</style>`);
+          } else if (combined.includes("href='styles.css'")) {
+            combined = combined.replace(/<link[^>]*href='styles.css'[^>]*>/i, `<style>${cssFile}</style>`);
+          } else {
+            combined = combined.replace('</head>', `<style>${cssFile}</style></head>`);
+          }
+
+          if (combined.includes('src="script.js"')) {
+            combined = combined.replace(new RegExp('<script[^>]*src="script.js"[^>]*><\\/script>', 'i'), '<script>' + jsFile + '</s' + 'cript>');
+          } else if (combined.includes("src='script.js'")) {
+            combined = combined.replace(new RegExp("<script[^>]*src='script.js'[^>]*><\\/script>", 'i'), '<script>' + jsFile + '</s' + 'cript>');
+          } else {
+            combined = combined.replace('</body>', '<script src="app.js"></script>
+</body>
+
+</html>
