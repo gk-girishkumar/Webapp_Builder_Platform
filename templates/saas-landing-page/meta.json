@@ -1,0 +1,7 @@
+{
+  "id": "saas-landing-page",
+  "name": "SaaS Landing Page",
+  "tags": ["marketing", "landing", "saas"],
+  "stack": "react-vite-tailwind",
+  "prompt_seed": "A modern SaaS landing page with hero, pricing, testimonials, features. Light and clean layout, high contrast blue accents."
+}

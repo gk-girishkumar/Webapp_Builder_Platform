@@ -2969,3 +2969,78 @@ export async function handlePlaceholderImage(req, res) {
     res.redirect(`https://image.pollinations.ai/prompt/${encodeURIComponent(keyword)}?width=800&height=600&nologo=true`);
   }
 }
+
+import fsSync from 'fs';
+import pathModule from 'path';
+import { execSync } from 'child_process';
+
+/**
+ * POST /api/clone-template
+ * Clones a real boilerplate template and injects AI customizations.
+ */
+export async function handleCloneTemplate(req, res) {
+  try {
+    const { templateId, prompt } = req.body;
+    if (!templateId) return res.status(400).json({ error: 'templateId required' });
+
+    const templatePath = pathModule.resolve('./templates', templateId);
+    if (!fsSync.existsSync(templatePath)) {
+      return res.status(404).json({ error: 'Template not found in /templates directory' });
+    }
+
+    const workspaceId = `ws-${Date.now()}`;
+    const workspacePath = pathModule.resolve('./workspaces', workspaceId);
+    
+    // 1. Clone the template directory
+    fsSync.cpSync(templatePath, workspacePath, { recursive: true });
+
+    // 2. Read metadata and AI customization (mocked logic or LLM call here)
+    const metaPath = pathModule.join(workspacePath, 'meta.json');
+    let meta = {};
+    if (fsSync.existsSync(metaPath)) {
+      meta = JSON.parse(fsSync.readFileSync(metaPath, 'utf8'));
+    }
+
+    const systemPrompt = `You are an expert React developer. Modifying the following App.jsx file based on the template prompt: ${meta.prompt || ''}. The user also requested: ${prompt}. Return ONLY the new App.jsx content as plain text, no markdown blocks.`;
+    
+    const appJsxPath = pathModule.join(workspacePath, 'src', 'App.jsx');
+    let currentAppJsx = '';
+    if (fsSync.existsSync(appJsxPath)) {
+      currentAppJsx = fsSync.readFileSync(appJsxPath, 'utf8');
+      
+      // Call Azure OpenAI (using the existing callOpenAI wrapper from filter.js)
+      try {
+        const aiResponse = await callOpenAI(
+          systemPrompt,
+          [{ role: 'user', content: `Current App.jsx:\n\n${currentAppJsx}` }],
+          { max_tokens: 4000, temperature: 0.7 }
+        );
+        
+        let newContent = aiResponse.content;
+        // Clean up potential markdown blocks
+        if (newContent.startsWith('```')) {
+          newContent = newContent.replace(/^```(jsx|javascript|js)?\n/, '').replace(/\n```$/, '');
+        }
+        
+        fsSync.writeFileSync(appJsxPath, newContent);
+        console.log(`[clone-template] Customized ${workspaceId} via AI.`);
+      } catch (aiErr) {
+        console.error('AI customization failed, keeping original boilerplate:', aiErr.message);
+      }
+    }
+
+    // 3. Build the customized workspace
+    try {
+      execSync('npm install', { cwd: workspacePath, stdio: 'ignore' });
+      execSync('npm run build', { cwd: workspacePath, stdio: 'ignore' });
+    } catch (buildErr) {
+      console.error('Build failed for workspace:', buildErr.message);
+    }
+
+    return res.json({ success: true, workspaceId, previewUrl: `/workspaces/${workspaceId}/dist/index.html` });
+  } catch (err) {
+    console.error('[clone-template] Error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+

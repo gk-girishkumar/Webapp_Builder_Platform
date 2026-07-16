@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import multer from 'multer';
 import os from 'os';
-import { handleFilterPrompt, handleGeneratePlan, handleAnalyzeAndPlan, handleGenerateCode, handleConfig, handleGenerateImage, handleGenerateExamplePrompt, handleCustomizeCode, handleTranscribe, handleGetTemplate, handleListTemplates, handleEditTemplate, handlePlaceholderImage } from './filter.js';
+import { handleFilterPrompt, handleGeneratePlan, handleAnalyzeAndPlan, handleGenerateCode, handleConfig, handleGenerateImage, handleGenerateExamplePrompt, handleCustomizeCode, handleTranscribe, handleGetTemplate, handleListTemplates, handleEditTemplate, handlePlaceholderImage, handleCloneTemplate } from './filter.js';
 
 const app = express();
 app.use(cors());
@@ -12,6 +12,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.resolve('./')));
 app.use('/generated-images', express.static(path.resolve('./generated-images')));
 app.use('/public-pdfs', express.static(path.resolve('./public-pdfs')));
+app.use('/workspaces', express.static(path.resolve('./workspaces')));
 
 // DALL-E Placeholder Fallback for broken template images
 app.get('/images/*', handlePlaceholderImage);
@@ -48,6 +49,7 @@ app.post('/api/transcribe', upload.single('audio'), handleTranscribe);
 app.get('/api/templates', handleListTemplates);
 app.get('/api/templates/:id', handleGetTemplate);
 app.post('/api/edit-template', express.json({ limit: '50mb' }), handleEditTemplate);
+app.post('/api/clone-template', express.json({ limit: '50mb' }), handleCloneTemplate);
 
 app.listen(PORT, () => {
   console.log(`Filter API listening on http://localhost:${PORT}`);
